@@ -10,6 +10,9 @@ Main Responsibilities:
 - Extract genotype and marker information.
 - Organize data for use in QTL mapping methods (SIM and SMT).
 
+
+
+EYASSSSS
 """
 
 import os
