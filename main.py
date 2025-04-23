@@ -17,6 +17,7 @@ To use:
 
 import os
 from vcf_data_handler import parse_vcf_file, generate_genetic_map
+from plot_utils import plot_genetic_map, plot_genetic_distance_circles,plot_full_recombination_dots
 import matplotlib.pyplot as plt
 
 def main():
@@ -56,19 +57,12 @@ def main():
     else:
         print(f"{chr_id} not found in genetic maps.")
 
-    genetic_map_chr01 = genetic_maps[chr_id]["genetic_map"]
-    # Extract X (positions) and Y (cM distances)
-    positions = [entry['pos'] for entry in genetic_map_chr01]
-    distances = [entry['cM'] for entry in genetic_map_chr01]
-
-    # Plot the genetic map
-    plt.figure(figsize=(10, 6))
-    plt.plot(positions, distances, marker='o', linestyle='-')
-    plt.title("Genetic Map for chr01")
-    plt.xlabel("Marker Position (bp)")
-    plt.ylabel("Genetic Distance (cM)")
-    plt.grid(True)
-    plt.tight_layout()
+    
+    # Generate plots
+    fig1 = plot_genetic_map(genetic_maps[chr_id]["genetic_map"], chr_id)
+    fig2 = plot_full_recombination_dots(genetic_maps[chr_id]["genetic_map"], chr_id)
     plt.show()
+
+
 if __name__ == "__main__":
     main()

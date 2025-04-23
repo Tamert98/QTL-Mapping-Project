@@ -26,7 +26,9 @@ def parse_vcf_file(vcf_file_path):
                 header_index_map = {name: idx for idx, name in enumerate(header_parts)}
                 try:
                     format_index = header_index_map["FORMAT"]
-                    sample_names = header_parts[format_index + 1:]
+                    raw_sample_names = header_parts[format_index + 1:]
+                    sample_names = [name.split(".")[0] for name in raw_sample_names]
+
                 except KeyError:
                     print("ERROR: 'FORMAT' column not found in header.")
                     return {}
@@ -71,35 +73,53 @@ def generate_genetic_map(vcf_data, sample_names):
     for chrom_id, chrom_data in vcf_data.items():
         markers = chrom_data["markers"]
         if len(markers) < 2:
-            continue  # Skip chromosomes with fewer than 2 markers
+            continue
 
-        # Start with the first marker
-        m1 = select_starting_marker(markers)
-        m1_samples = m1["samples"]
+        m0 = select_starting_marker(markers)
+        m0_samples = m0["samples"]
 
-        genetic_map = [{"pos": m1["pos"], "cM": 0.0}]
+        m0_i00 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "0/0")
+        m0_i11 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "1/1")
 
-        for m2 in markers[1:]:
-            m2_samples = m2["samples"]
+        genetic_map = [{
+            "pos": m0["pos"],
+            "cM": 0.0,
+            "r": 0.0,
+            "i00": m0_i00,
+            "i11": m0_i11
+        }]
+
+        for m in markers[1:]:
+            m_samples = m["samples"]
             i00 = i01 = i10 = i11 = known = 0
 
             for name in sample_names:
-                gt1 = m1_samples.get(name, {}).get("GT")
-                gt2 = m2_samples.get(name, {}).get("GT")
+                gt0 = m0_samples.get(name, {}).get("GT")
+                gt = m_samples.get(name, {}).get("GT")
 
-                if gt1 in {"0/0", "1/1"} and gt2 in {"0/0", "1/1"}:
+                if gt0 in {"0/0", "1/1"} and gt in {"0/0", "1/1"}:
                     known += 1
-                    if gt1 == "0/0" and gt2 == "0/0":
+                    if gt0 == "0/0" and gt == "0/0":
                         i00 += 1
-                    elif gt1 == "0/0" and gt2 == "1/1":
+                    elif gt0 == "0/0" and gt == "1/1":
                         i01 += 1
-                    elif gt1 == "1/1" and gt2 == "0/0":
+                    elif gt0 == "1/1" and gt == "0/0":
                         i10 += 1
-                    elif gt1 == "1/1" and gt2 == "1/1":
+                    elif gt0 == "1/1" and gt == "1/1":
                         i11 += 1
 
+            mi_i00 = sum(1 for name in sample_names if m_samples.get(name, {}).get("GT") == "0/0")
+            mi_i11 = sum(1 for name in sample_names if m_samples.get(name, {}).get("GT") == "1/1")
+
             if known == 0:
-                continue  # Skip if no valid genotype pairs
+                genetic_map.append({
+                    "pos": m["pos"],
+                    "cM": genetic_map[-1]["cM"],
+                    "r": None,
+                    "i00": mi_i00,
+                    "i11": mi_i11
+                })
+                continue
 
             recomb_count = min(i01 + i10, i00 + i11)
             r = recomb_count / known
@@ -107,22 +127,20 @@ def generate_genetic_map(vcf_data, sample_names):
             try:
                 distance = -50 * math.log(1 - 2 * r)
             except ValueError:
-                distance = float('inf')  # In case r > 0.5 or invalid
+                distance = float('inf')
 
-            last_cM = genetic_map[-1]["cM"]
             genetic_map.append({
-                "pos": m2["pos"],
-                "cM": last_cM + distance
+                "pos": m["pos"],
+                "cM": distance,
+                "r": r,
+                "i00": mi_i00,
+                "i11": mi_i11
             })
 
-            # Update m1 for the next comparison
-            m1 = m2
-            m1_samples = m2_samples
-
-        # Store genetic map for the chromosome
         genetic_maps[chrom_id] = {
             "length": chrom_data["length"],
             "genetic_map": genetic_map
         }
 
     return genetic_maps
+
