@@ -144,3 +144,43 @@ def generate_genetic_map(vcf_data, sample_names):
 
     return genetic_maps
 
+def parse_trait_file(trait_file_path):
+    """
+    Parses a trait file with multiple traits and returns:
+    - sample_names: list of cleaned sample names (e.g., 'male-1')
+    - traits: dictionary mapping each trait name to a dictionary of {sample_name: value}
+              where value is a float or None if unknown ($)
+    """
+    traits = {}
+
+    with open(trait_file_path, "r") as f:
+        lines = f.readlines()
+
+        if len(lines) < 2:
+            raise ValueError("Trait file must contain at least two lines.")
+
+        # Line 1: sample names (e.g., male-1.bowtie)
+        raw_samples = lines[0].strip().split()
+        sample_names = [s.split('.')[0] for s in raw_samples]
+
+        for line in lines[1:]:
+            parts = line.strip().split()
+            trait_name = parts[0]
+            raw_values = parts[1:]
+
+            if len(raw_values) != len(sample_names):
+                raise ValueError(f"Trait '{trait_name}' has a mismatched number of values.")
+
+            value_dict = {}
+            for name, val in zip(sample_names, raw_values):
+                if val == "$":
+                    value_dict[name] = None
+                else:
+                    try:
+                        value_dict[name] = float(val)
+                    except ValueError:
+                        value_dict[name] = None
+
+            traits[trait_name] = value_dict
+
+    return sample_names, traits

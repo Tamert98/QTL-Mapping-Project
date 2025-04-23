@@ -16,7 +16,7 @@ To use:
 """
 
 import os
-from vcf_data_handler import parse_vcf_file, generate_genetic_map
+from vcf_data_handler import parse_vcf_file, generate_genetic_map,parse_trait_file
 from plot_utils import plot_genetic_map, plot_genetic_distance_circles,plot_full_recombination_dots
 import matplotlib.pyplot as plt
 
@@ -57,6 +57,13 @@ def main():
     else:
         print(f"{chr_id} not found in genetic maps.")
 
+    trait_path = os.path.join("Data", "traits.txt")
+    sample_names, traits = parse_trait_file(trait_path)
+
+    print("Available traits:", list(traits.keys())[:3])
+    print("Values for TC25Me3 (first 5 samples):")
+    for name in sample_names[:5]:
+        print(name, "->", traits["TC25Me3"].get(name))
     
     # Generate plots
     fig1 = plot_genetic_map(genetic_maps[chr_id]["genetic_map"], chr_id)
