@@ -16,9 +16,19 @@ To use:
 """
 
 import os
-from vcf_data_handler import parse_vcf_file, generate_genetic_map,parse_trait_file
-from plot_utils import plot_genetic_map, plot_genetic_distance_circles,plot_full_recombination_dots
 import matplotlib.pyplot as plt
+from vcf_data_handler import (
+    parse_vcf_file,
+    generate_genetic_map,
+    generate_genetic_map_filtered, 
+    generate_pairwise_genetic_map, 
+    parse_trait_file,
+)
+from plot_utils import (
+    plot_genetic_map,
+    plot_genetic_distance_circles,
+    plot_full_recombination_heatmap,
+)
 
 def main():
     # Set the path to the VCF file (relative to this script)
@@ -33,7 +43,7 @@ def main():
     print("First 5 chromosome IDs:", chrom_ids[:5])
 
     # Print number of markers and first 4 markers in chr01
-    chr_id = "chr01"
+    chr_id = "chr03"
     if chr_id in vcf_data:
         chr01_markers = vcf_data[chr_id]["markers"]
         print(f"\nNumber of markers in {chr_id}: {len(chr01_markers)}")
@@ -48,15 +58,26 @@ def main():
     else:
         print(f"{chr_id} not found in VCF data.")
 
-    # Generate and print genetic map
-    genetic_maps = generate_genetic_map(vcf_data, sample_names)
-    if chr_id in genetic_maps:
-        print(f"\nFirst 3 elements in genetic map for {chr_id}:")
-        for entry in genetic_maps[chr_id]["genetic_map"][:3]:
+    # Generate both unfiltered and filtered genetic maps
+    genetic_maps_unfiltered = generate_genetic_map(vcf_data, sample_names)
+    genetic_maps_filtered = generate_genetic_map_filtered(vcf_data, sample_names)  
+    # Generate pairwise map for all marker pairs
+    genetic_map_pairwise_chr = generate_pairwise_genetic_map(vcf_data, sample_names, chr_id)
+    if chr_id in genetic_maps_unfiltered:
+        print(f"\nFirst 3 elements in unfiltered genetic map for {chr_id}:")
+        for entry in genetic_maps_unfiltered[chr_id]["genetic_map"][:3]:
             print(entry)
     else:
-        print(f"{chr_id} not found in genetic maps.")
+        print(f"{chr_id} not found in unfiltered genetic maps.")
 
+    if chr_id in genetic_maps_filtered:
+        print(f"\nFirst 3 elements in filtered genetic map for {chr_id}:")
+        for entry in genetic_maps_filtered[chr_id]["genetic_map"][:3]:
+            print(entry)
+    else:
+        print(f"{chr_id} not found in filtered genetic maps.")
+
+    # Parse trait data
     trait_path = os.path.join("Data", "traits.txt")
     sample_names, traits = parse_trait_file(trait_path)
 
@@ -65,11 +86,11 @@ def main():
     for name in sample_names[:5]:
         print(name, "->", traits["TC25Me3"].get(name))
     
-    # Generate plots
-    fig1 = plot_genetic_map(genetic_maps[chr_id]["genetic_map"], chr_id)
-    fig2 = plot_full_recombination_dots(genetic_maps[chr_id]["genetic_map"], chr_id)
+    # Generate plots (using unfiltered data for now)
+    fig1 = plot_genetic_map(genetic_maps_unfiltered[chr_id]["genetic_map"], chr_id)
+    fig2 = plot_genetic_map(genetic_maps_filtered[chr_id]["genetic_map"], chr_id)
+    fig_pairwise = plot_full_recombination_heatmap(genetic_map_pairwise_chr["pairwise_map"], chr_id=chr_id)
     plt.show()
-
-
+    
 if __name__ == "__main__":
     main()

@@ -90,50 +90,39 @@ def plot_genetic_distance_circles(genetic_map, chr_id="unknown"):
     fig.tight_layout()
 
     return fig
-import matplotlib.pyplot as plt
-import numpy as np
 
-def plot_full_recombination_dots(genetic_map, chr_id="unknown"):
+
+def plot_full_recombination_heatmap(pairwise_map, chr_id="unknown"):
     """
-    Plots a dot for each pair of marker positions on a chromosome.
-    Dot color = absolute recombination rate difference (|rᵢ - rⱼ|), normalized.
-    Black = similar (close markers), White = high recombination distance.
+    Plots a dot for each pair of marker positions on a chromosome using actual pairwise recombination rates.
+    Dot color = recombination rate (r), normalized by a fixed maximum of 200.
     """
-    if not genetic_map:
-        print("No markers to plot.")
+    if not pairwise_map:
+        print("No pairwise recombination data to plot.")
         return None
 
-    # Filter valid markers with numeric pos and r
-    valid_markers = [
-        m for m in genetic_map
-        if isinstance(m.get("pos"), (int, float)) and isinstance(m.get("r"), (int, float))
+    # Extract valid entries
+    valid_entries = [
+        entry for entry in pairwise_map
+        if isinstance(entry.get("pos_i"), (int, float)) and
+           isinstance(entry.get("pos_j"), (int, float)) and
+           isinstance(entry.get("r"), (int, float))
     ]
-    if len(valid_markers) < 2:
-        print("Not enough valid markers.")
+    if len(valid_entries) < 1:
+        print("No valid pairwise recombination entries found.")
         return None
 
-    positions = np.array([m["pos"] for m in valid_markers])
-    r_values = np.array([m["r"] for m in valid_markers])
+    # Extract positions and values
+    x = [entry["pos_i"] for entry in valid_entries]
+    y = [entry["pos_j"] for entry in valid_entries]
+    r_values = [entry["r"] for entry in valid_entries]
 
-    if np.all(r_values == r_values[0]):
-        print("All recombination rates are equal — skipping plot.")
-        return None
-
-    # Pairwise recombination difference matrix
-    pos_i, pos_j = np.meshgrid(positions, positions)
-    r_i, r_j = np.meshgrid(r_values, r_values)
-
-    r_diff = np.abs(r_i - r_j)
-    r_norm = r_diff / np.max(r_diff)  # Normalized to [0, 1]
-
-    # Flatten for plotting
-    x = pos_j.flatten()
-    y = pos_i.flatten()
-    c = r_norm.flatten()
+    # Normalize using fixed constant 200
+    r_norm = np.clip(np.array(r_values) / 200.0, 0, 1)
 
     fig, ax = plt.subplots(figsize=(10, 10))
-    ax.scatter(x, y, c=c, cmap="gray", s=2, marker='s')  # grayscale
-    ax.set_title(f"Pairwise Recombination Map - {chr_id}")
+    scatter = ax.scatter(x, y, c=r_norm, cmap="gray", s=4, marker='s')
+    ax.set_title(f"Pairwise Recombination Dot Heatmap - {chr_id}")
     ax.set_xlabel("Marker Position (bp)")
     ax.set_ylabel("Marker Position (bp)")
     ax.set_aspect('equal')
