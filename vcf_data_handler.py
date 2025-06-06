@@ -141,107 +141,8 @@ def generate_genetic_map(vcf_data, sample_names):
 
     return genetic_maps
 
-# Generates a genetic map using only markers that pass quality filtering:
-# includes only markers where both 0/0 and 1/1 genotype counts are > 25% of total samples.
-# Skips markers that do not meet this threshold, and selects the first valid one as the starting point.
-def generate_genetic_map_filtered1(vcf_data, sample_names):
-    genetic_maps = {}
-    n = len(sample_names)
-    threshold = 0.25 * n
 
-    for chrom_id, chrom_data in vcf_data.items():
-        markers = chrom_data["markers"]
-        if len(markers) < 2:
-            continue
-
-        # Find first marker that satisfies the filtering condition
-        m0 = None
-        for marker in markers:
-            samples = marker["samples"]
-            i00 = sum(1 for name in sample_names if samples.get(name, {}).get("GT") == "0/0")
-            i11 = sum(1 for name in sample_names if samples.get(name, {}).get("GT") == "1/1")
-            if i00 > threshold and i11 > threshold:
-                m0 = marker
-                break
-
-        if m0 is None:
-            continue  # No valid m0 found
-
-        m0_samples = m0["samples"]
-        m0_i00 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "0/0")
-        m0_i11 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "1/1")
-
-        genetic_map = [{
-            "pos": m0["pos"],
-            "cM": 0.0,
-            "r": 0.0,
-            "i00": m0_i00,
-            "i11": m0_i11
-        }]
-
-        m0_index = markers.index(m0)
-
-        for m in markers[m0_index + 1:]:
-            m_samples = m["samples"]
-            mi_i00 = sum(1 for name in sample_names if m_samples.get(name, {}).get("GT") == "0/0")
-            mi_i11 = sum(1 for name in sample_names if m_samples.get(name, {}).get("GT") == "1/1")
-
-            # Skip markers that do not pass the threshold
-            if mi_i00 <= threshold or mi_i11 <= threshold:
-                continue
-
-            i00 = i01 = i10 = i11 = known = 0
-            for name in sample_names:
-                gt0 = m0_samples.get(name, {}).get("GT")
-                gt = m_samples.get(name, {}).get("GT")
-
-                if gt0 in {"0/0", "1/1"} and gt in {"0/0", "1/1"}:
-                    known += 1
-                    if gt0 == "0/0" and gt == "0/0":
-                        i00 += 1
-                    elif gt0 == "0/0" and gt == "1/1":
-                        i01 += 1
-                    elif gt0 == "1/1" and gt == "0/0":
-                        i10 += 1
-                    elif gt0 == "1/1" and gt == "1/1":
-                        i11 += 1
-
-            if known == 0:
-                genetic_map.append({
-                    "pos": m["pos"],
-                    "cM": genetic_map[-1]["cM"],
-                    "r": None,
-                    "i00": mi_i00,
-                    "i11": mi_i11
-                })
-                continue
-
-            recomb_count = min(i01 + i10, i00 + i11)
-            r = recomb_count / known
-
-            try:
-                distance = -50 * math.log(1 - 2 * r)
-            except ValueError:
-                distance = float('inf')
-
-            genetic_map.append({
-                "pos": m["pos"],
-                "cM": distance,
-                "r": r,
-                "i00": mi_i00,
-                "i11": mi_i11
-            })
-
-        if len(genetic_map) > 1:
-            genetic_maps[chrom_id] = {
-                "length": chrom_data["length"],
-                "genetic_map": genetic_map
-            }
-
-    return genetic_maps
-
-
-def is_good_genotype(gt_info, min_dp=10, min_gq=20, min_delta_pl=20):
+def is_good_genotype(gt_info, min_dp=30, min_gq=70, min_delta_pl=90):
     try:
         dp = int(gt_info.get("DP", 0))
         gq = int(gt_info.get("GQ", 0))
@@ -256,6 +157,7 @@ def is_good_genotype(gt_info, min_dp=10, min_gq=20, min_delta_pl=20):
     except Exception:
         return False
 
+    
 def generate_genetic_map_filtered(vcf_data, sample_names):
     genetic_maps = {}
     n = len(sample_names)
@@ -371,23 +273,6 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
     return genetic_maps
 
 
-
-
-
-def is_good_genotype(gt_info, min_dp=10, min_gq=20, min_delta_pl=20):
-    try:
-        dp = int(gt_info.get("DP", 0))
-        gq = int(gt_info.get("GQ", 0))
-        pl_str = gt_info.get("PL", "")
-        pl = list(map(int, pl_str.split(","))) if pl_str else []
-
-        if dp < min_dp or gq < min_gq or len(pl) < 2:
-            return False
-
-        sorted_pl = sorted(pl)
-        return (sorted_pl[1] - sorted_pl[0]) >= min_delta_pl
-    except Exception:
-        return False
 
 def generate_pairwise_genetic_map(vcf_data, sample_names, chrom_id):
     n = len(sample_names)

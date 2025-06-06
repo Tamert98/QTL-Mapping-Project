@@ -129,3 +129,109 @@ def plot_full_recombination_heatmap(pairwise_map, chr_id="unknown"):
     fig.tight_layout()
 
     return fig
+
+def plot_f_statistic(df, chrom_id):
+    """
+    Plots F-statistic values across a specified chromosome.
+
+    Args:
+        df (pd.DataFrame): DataFrame with SMT results.
+        chrom_id (str): Chromosome to plot.
+
+    Returns:
+        matplotlib Figure object
+    """
+    chrom_data = df[df['chrom'] == chrom_id]
+    if chrom_data.empty:
+        print(f"No data found for chromosome {chrom_id}")
+        return None
+
+    fig = plt.figure()
+    plt.plot(chrom_data['pos'], chrom_data['F'], marker='o')
+    plt.title(f"F-statistic across chromosome {chrom_id}")
+    plt.xlabel("Marker Position")
+    plt.ylabel("F-statistic")
+    plt.grid(True)
+    plt.tight_layout()
+    return fig
+
+
+def plot_p_values(df, chrom_id):
+    """
+    Plots p-values (log scale) across a specified chromosome.
+
+    Args:
+        df (pd.DataFrame): DataFrame with SMT results.
+        chrom_id (str): Chromosome to plot.
+
+    Returns:
+        matplotlib Figure object
+    """
+    chrom_data = df[df['chrom'] == chrom_id]
+    if chrom_data.empty:
+        print(f"No data found for chromosome {chrom_id}")
+        return None
+
+    fig = plt.figure()
+    plt.plot(chrom_data['pos'], chrom_data['p'], marker='o', color='red')
+    plt.axhline(y=0.05, color='gray', linestyle='--', label='p = 0.05')
+    plt.yscale("log")
+    plt.title(f"P-values across chromosome {chrom_id}")
+    plt.xlabel("Marker Position")
+    plt.ylabel("P-value (log scale)")
+    plt.legend()
+    plt.grid(True, which='both')
+    plt.tight_layout()
+    return fig
+
+
+def plot_log_p_values(df, chrom_id, significance_level=0.05):
+    """
+    Plots QTL significance (-log10(p-value)) across a specified chromosome.
+
+    Args:
+        df (pd.DataFrame): DataFrame with SMT results.
+        chrom_id (str): Chromosome to plot.
+        significance_level (float): Threshold for significance (default = 0.05).
+
+    Returns:
+        matplotlib Figure object
+    """
+    chrom_data = df[df['chrom'] == chrom_id]
+    if chrom_data.empty:
+        print(f"No data found for chromosome {chrom_id}")
+        return None
+
+    log_p = -np.log10(chrom_data['p'])
+    threshold = -np.log10(significance_level)
+
+    fig = plt.figure()
+    plt.plot(chrom_data['pos'], log_p, marker='o', color='darkblue')
+    plt.axhline(y=threshold, color='red', linestyle='--', label=f'p = {significance_level}')
+    plt.title(f"QTL Significance across Chromosome {chrom_id}")
+    plt.xlabel("Marker Position (bp)")
+    plt.ylabel("QTL Significance (-log10 p-value)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    return fig
+
+def plot_combined_qtl_significance(df, significance_threshold=0.05):
+    df["-log10(p)"] = -np.log10(df["p"])
+    df["significant"] = df["p"] < significance_threshold
+    significant_df = df[df["significant"]].sort_values(by="pos")
+
+    if significant_df.empty:
+        print("No significant markers found.")
+        return None
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(significant_df["pos"], significant_df["-log10(p)"], marker="o", linestyle='-', color="blue")
+    ax.axhline(-np.log10(significance_threshold), color="red", linestyle="--", label=f"p = {significance_threshold}")
+    ax.set_title("QTL Significance Map (based on p-value)")
+    ax.set_xlabel("Marker Position (bp)")
+    ax.set_ylabel("QTL Significance (higher = stronger)")
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+    return fig

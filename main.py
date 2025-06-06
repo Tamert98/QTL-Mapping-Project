@@ -1,18 +1,15 @@
 """
 main.py
 
-This is the main script for running the QTL mapping pipeline. It orchestrates 
-the full analysis by loading the input VCF file, applying the SMT and SIM 
-methods, and displaying or saving the results.
+This is the main script for running the QTL mapping pipeline.
+It orchestrates the full analysis by loading the input VCF file,
+applying the SMT method, and displaying the results.
 
 Main Responsibilities:
-- Load genotype data via vcf_parser.
-- Load phenotype data from file or hardcoded input.
-- Run SMT and SIM analyses.
-- Display results or export them to files.
-
-To use:
-    python main.py --vcf your_file.vcf --phenotype phenotype.csv
+- Load genotype and trait data.
+- Generate genetic maps (filtered and unfiltered).
+- Run Single Marker Test (SMT) and compute statistics.
+- Plot the genetic map and SMT results.
 """
 
 import os
@@ -20,77 +17,51 @@ import matplotlib.pyplot as plt
 from vcf_data_handler import (
     parse_vcf_file,
     generate_genetic_map,
-    generate_genetic_map_filtered, 
-    generate_pairwise_genetic_map, 
+    generate_genetic_map_filtered,
     parse_trait_file,
 )
 from plot_utils import (
     plot_genetic_map,
-    plot_genetic_distance_circles,
-    plot_full_recombination_heatmap,
+    plot_f_statistic,
+    plot_p_values,
+    plot_log_p_values,
+    plot_combined_qtl_significance,
 )
+from single_marker_test import run_smt_regression_and_export,find_best_qtl
 
 def main():
-    # Set the path to the VCF file (relative to this script)
+    # Input paths
     vcf_path = os.path.join("Data", "cataglyphis.final.DZ (1).vcf")
-
-    # Parse the VCF file
-    vcf_data, sample_names = parse_vcf_file(vcf_path)
-
-    # Print number of chromosomes and first 5 chromosome IDs
-    chrom_ids = list(vcf_data.keys())
-    print(f"Number of chromosomes: {len(chrom_ids)}")
-    print("First 5 chromosome IDs:", chrom_ids[:5])
-
-    # Print number of markers and first 4 markers in chr01
-    chr_id = "chr03"
-    if chr_id in vcf_data:
-        chr01_markers = vcf_data[chr_id]["markers"]
-        print(f"\nNumber of markers in {chr_id}: {len(chr01_markers)}")
-        print(f"First 4 markers in {chr_id} (showing 5 samples each):")
-        for i, marker in enumerate(chr01_markers[:4]):
-            print(f"\nMarker {i+1}: pos = {marker['pos']}, ref = {marker['ref']}, alt = {marker['alt']}, qual = {marker['qual']}")
-            print("Samples (first 5):")
-            for j, (sample, values) in enumerate(marker["samples"].items()):
-                if j >= 5:
-                    break
-                print(f"  {sample}: {values}")
-    else:
-        print(f"{chr_id} not found in VCF data.")
-
-    # Generate both unfiltered and filtered genetic maps
-    genetic_maps_unfiltered = generate_genetic_map(vcf_data, sample_names)
-    genetic_maps_filtered = generate_genetic_map_filtered(vcf_data, sample_names)  
-    # Generate pairwise map for all marker pairs
-    genetic_map_pairwise_chr = generate_pairwise_genetic_map(vcf_data, sample_names, chr_id)
-    if chr_id in genetic_maps_unfiltered:
-        print(f"\nFirst 3 elements in unfiltered genetic map for {chr_id}:")
-        for entry in genetic_maps_unfiltered[chr_id]["genetic_map"][:3]:
-            print(entry)
-    else:
-        print(f"{chr_id} not found in unfiltered genetic maps.")
-
-    if chr_id in genetic_maps_filtered:
-        print(f"\nFirst 3 elements in filtered genetic map for {chr_id}:")
-        for entry in genetic_maps_filtered[chr_id]["genetic_map"][:3]:
-            print(entry)
-    else:
-        print(f"{chr_id} not found in filtered genetic maps.")
-
-    # Parse trait data
     trait_path = os.path.join("Data", "traits.txt")
+    trait_to_test = "TC25Me3"
+    chr_id = "chr03"
+
+    # Load VCF data and trait values
+    vcf_data, sample_names = parse_vcf_file(vcf_path)
     sample_names, traits = parse_trait_file(trait_path)
 
-    print("Available traits:", list(traits.keys())[:3])
-    print("Values for TC25Me3 (first 5 samples):")
-    for name in sample_names[:5]:
-        print(name, "->", traits["TC25Me3"].get(name))
-    
-    # Generate plots (using unfiltered data for now)
+    # Generate genetic maps
+    genetic_maps_unfiltered = generate_genetic_map(vcf_data, sample_names)
+    genetic_maps_filtered = generate_genetic_map_filtered(vcf_data, sample_names)
+
+    # Run Single Marker Test and save results
+    df = run_smt_regression_and_export(vcf_data, traits, trait_to_test, sample_names)
+
+    # Plot results for a specific chromosome
     fig1 = plot_genetic_map(genetic_maps_unfiltered[chr_id]["genetic_map"], chr_id)
     fig2 = plot_genetic_map(genetic_maps_filtered[chr_id]["genetic_map"], chr_id)
-    fig_pairwise = plot_full_recombination_heatmap(genetic_map_pairwise_chr["pairwise_map"], chr_id=chr_id)
+    fig3 = plot_f_statistic(df, chr_id)
+    fig4 = plot_log_p_values(df, chr_id)
+
+    # Plot overall QTL significance
+    fig5 = plot_combined_qtl_significance(df)
+
+    # Find most significant QTL in BP and cM
+    smtQtl_Bp, smtQtl_Cm = find_best_qtl(df, genetic_maps_filtered)
+    print(f"Most significant QTL: BP = {smtQtl_Bp}, cM = {smtQtl_Cm}")
+
+    # Show all figures
     plt.show()
-    
+
 if __name__ == "__main__":
     main()
