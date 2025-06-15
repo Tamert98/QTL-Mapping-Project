@@ -10,7 +10,7 @@ Main Responsibilities:
 - Derive p-value and LOD score.
 - Save results to CSV.
 """
-
+import os
 import numpy as np
 import pandas as pd
 from scipy.stats import f
@@ -105,3 +105,29 @@ def find_best_qtl(df, genetic_maps):
                 break
 
     return best_bp, best_cM
+
+def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/SMT/SMT_All_Traits"):
+    """
+    Runs SMT regression for all traits in the dataset.
+
+    Args:
+        vcf_data (dict): Parsed VCF genotype data.
+        traits (dict): Parsed traits {trait_name: {sample: value}}.
+        sample_names (list): Sample IDs from VCF.
+        output_dir (str): Directory where SMT CSV files will be saved.
+
+    Returns:
+        dict: {trait_name: DataFrame of SMT results}
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    results_per_trait = {}
+
+    for trait_name in traits.keys():
+        print(f"Running SMT for trait: {trait_name}")
+
+        output_csv = os.path.join(output_dir, f"smt_results_{trait_name}.csv")
+        df = run_smt_regression_and_export(vcf_data, traits, trait_name, sample_names, output_csv=output_csv)
+
+        results_per_trait[trait_name] = df
+
+    return results_per_trait

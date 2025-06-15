@@ -1,42 +1,53 @@
 """
 main.py
 
-This is the main script for running the QTL mapping pipeline.
-It orchestrates the full analysis by loading the input VCF file,
-applying the SMT method, and displaying the results.
+Main script for running the full QTL mapping pipeline.
 
-Main Responsibilities:
+Responsibilities:
 - Load genotype and trait data.
 - Generate genetic maps (filtered and unfiltered).
-- Run Single Marker Test (SMT) and compute statistics.
-- Plot the genetic map and SMT results.
+- Generate pairwise recombination maps.
+- Compute global axis limits (for unified plots).
+- Run Single Marker Test (SMT) and export QTL results.
+- Generate and export:
+    * Genetic maps (PDF)
+    * Filtered genetic maps (PDF)
+    * Heatmaps (PDF)
+    * SMT significance plots (PDF)
 """
 
 import os
-import matplotlib.pyplot as plt
 from vcf_data_handler import (
     parse_vcf_file,
     generate_genetic_map,
     generate_genetic_map_filtered,
+    generate_pairwise_genetic_map,
     parse_trait_file,
 )
 from plot_utils import (
-    plot_genetic_map,
-    plot_f_statistic,
-    plot_p_values,
-    plot_log_p_values,
-    plot_combined_qtl_significance,
+    compute_global_physical_max,
+    generate_genetic_map_images_and_pdf,
+    generate_filtered_genetic_map_images_and_pdf,
+    generate_heatmap_images_and_pdf,
+    generate_smt_chromosome_images,
+    stitch_smt_chromosome_images_pdf,
+    plot_concatenated_qtl_significance,
+    generate_concatenated_qtl_pdf,
 )
-from single_marker_test import run_smt_regression_and_export,find_best_qtl
+from single_marker_test import (
+    run_smt_regression_and_export,
+    find_best_qtl,
+    run_smt_for_all_traits
+)
 
 def main():
-    # Input paths
+    # Input paths and parameters
     vcf_path = os.path.join("Data", "cataglyphis.final.DZ (1).vcf")
     trait_path = os.path.join("Data", "traits.txt")
     trait_to_test = "TC25Me3"
-    chr_id = "chr03"
+    pvalue_cutoff = 0.05
 
-    # Load VCF data and trait values
+    # Load data
     vcf_data, sample_names = parse_vcf_file(vcf_path)
     sample_names, traits = parse_trait_file(trait_path)
 
@@ -44,24 +55,41 @@ def main():
     genetic_maps_unfiltered = generate_genetic_map(vcf_data, sample_names)
     genetic_maps_filtered = generate_genetic_map_filtered(vcf_data, sample_names)
 
-    # Run Single Marker Test and save results
+    # Compute global x-axis based on unfiltered maps
+    global_xmax = compute_global_physical_max(genetic_maps_unfiltered)
+
+    # Export Genetic Maps with unified X axis
+    generate_genetic_map_images_and_pdf(genetic_maps_unfiltered, global_xmax)
+    generate_filtered_genetic_map_images_and_pdf(genetic_maps_filtered, global_xmax)
+
+    # Generate pairwise recombination maps for heatmaps
+    pairwise_maps = {}
+    for chrom_id in genetic_maps_unfiltered:
+        pairwise = generate_pairwise_genetic_map(vcf_data, sample_names, chrom_id)
+        if pairwise:
+            pairwise_maps[chrom_id] = pairwise
+
+    # Export Heatmaps with unified X/Y axis
+    generate_heatmap_images_and_pdf(pairwise_maps)
+
+    # Run SMT for selected trait
     df = run_smt_regression_and_export(vcf_data, traits, trait_to_test, sample_names)
 
-    # Plot results for a specific chromosome
-    fig1 = plot_genetic_map(genetic_maps_unfiltered[chr_id]["genetic_map"], chr_id)
-    fig2 = plot_genetic_map(genetic_maps_filtered[chr_id]["genetic_map"], chr_id)
-    fig3 = plot_f_statistic(df, chr_id)
-    fig4 = plot_log_p_values(df, chr_id)
+    # Generate per-chromosome SMT significance images and combine to PDF
+    generate_smt_chromosome_images(df, trait_to_test, significance_level=pvalue_cutoff)
+    final_pdf_path = stitch_smt_chromosome_images_pdf(trait_to_test)
 
-    # Plot overall QTL significance
-    fig5 = plot_combined_qtl_significance(df)
+    # Plot genome-wide concatenated QTL map for selected trait
+    plot_concatenated_qtl_significance(df, trait_to_test, significance_level=pvalue_cutoff)
 
-    # Find most significant QTL in BP and cM
-    smtQtl_Bp, smtQtl_Cm = find_best_qtl(df, genetic_maps_filtered)
+    # Report best QTL location found
+    smtQtl_Bp, smtQtl_Cm = find_best_qtl(df, genetic_maps_unfiltered)
     print(f"Most significant QTL: BP = {smtQtl_Bp}, cM = {smtQtl_Cm}")
+    print(f"SMT PDF generated: {final_pdf_path}")
 
-    # Show all figures
-    plt.show()
+    # Run SMT for all traits and export combined QTL maps
+    all_smt_results = run_smt_for_all_traits(vcf_data, traits, sample_names)
+    generate_concatenated_qtl_pdf(all_smt_results)
 
 if __name__ == "__main__":
     main()
