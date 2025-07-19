@@ -143,19 +143,28 @@ def generate_genetic_map(vcf_data, sample_names):
 
 
 def is_good_genotype(gt_info, min_dp=30, min_gq=70, min_delta_pl=90):
+    """
+    Less aggressive filter — allows more genotypes to pass, 
+    but still avoids very low-quality data.
+    """
     try:
         dp = int(gt_info.get("DP", 0))
         gq = int(gt_info.get("GQ", 0))
         pl_str = gt_info.get("PL", "")
         pl = list(map(int, pl_str.split(","))) if pl_str else []
 
-        if dp < min_dp or gq < min_gq or len(pl) < 2:
+        if dp < min_dp or gq < min_gq:
             return False
 
-        sorted_pl = sorted(pl)
-        return (sorted_pl[1] - sorted_pl[0]) >= min_delta_pl
+        if len(pl) >= 2:
+            sorted_pl = sorted(pl)
+            return (sorted_pl[1] - sorted_pl[0]) >= min_delta_pl
+        else:
+            return True  # Accept missing PL if DP and GQ pass
+
     except Exception:
         return False
+
 
     
 def generate_genetic_map_filtered(vcf_data, sample_names):
@@ -419,3 +428,49 @@ def parse_trait_file(trait_file_path):
             traits[trait_name] = value_dict
 
     return sample_names, traits
+
+def select_evenly_spaced_markers(genetic_maps_filtered, min_cm_spacing=3.0):
+    """
+    Select markers spaced at least `min_cm_spacing` cM apart in each chromosome
+    that starts with 'chr'. Only uses the 'genetic_map' list.
+
+    Parameters:
+        genetic_maps_filtered (dict): {
+            'chr01': {
+                'length': int,
+                'genetic_map': [ { 'pos': ..., 'cM': ..., ... }, ... ]
+            }, ...
+        }
+        min_cm_spacing (float): Minimum cM spacing between markers.
+
+    Returns:
+        dict: {
+            'chr01': [ {marker1}, {marker2}, ... ],
+            ...
+        }
+    """
+    spaced_markers = {}
+
+    for chrom, chrom_data in genetic_maps_filtered.items():
+        if not chrom.lower().startswith("chr"):
+            continue
+
+        marker_list = chrom_data.get("genetic_map", [])
+        if not marker_list:
+            continue
+
+        selected = []
+        last_cm = -float("inf")
+
+        for marker in marker_list:
+            cm = marker.get("cM")
+            if cm is None or not isinstance(cm, (float, int)):
+                continue
+            if cm - last_cm >= min_cm_spacing:
+                selected.append(marker)
+                last_cm = cm
+
+        if selected:
+            spaced_markers[chrom] = selected
+
+    return spaced_markers

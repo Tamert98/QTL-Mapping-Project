@@ -1,3 +1,4 @@
+
 """
 plot_utils.py
 
@@ -10,9 +11,17 @@ This module contains all plotting utilities for QTL Mapping:
 
 import os
 import numpy as np
+
+# ✅ Prevent matplotlib from using GUI backends (important for threading)
+import matplotlib
+matplotlib.use("Agg")  # Use non-interactive backend (no GUI popup)
+
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from PIL import Image
+from scipy.stats import chi2
+from matplotlib.backends.backend_pdf import PdfPages
+import math
 
 ##############################################
 # Global axis computation
@@ -190,6 +199,13 @@ def generate_heatmap_images_and_pdf(pairwise_maps, output_dir="Results/HeatMaps"
     images[0].save(pdf_path, save_all=True, append_images=images[1:])
     print(f"Heatmap PDF saved at: {pdf_path}")
 
+def print_heatmap_pdf_path(output_dir="Results/HeatMaps"):
+    """
+    Print the path to the heatmap PDF in the specified output directory.
+    """
+    pdf_path = os.path.join(output_dir, "final_heatmaps.pdf")
+    print(f"Heatmap PDF saved at: {pdf_path}")
+
 
 ##############################################
 # SMT -log10(p) Significance Plotting
@@ -253,7 +269,7 @@ def stitch_smt_chromosome_images_pdf(trait_name, output_filename="final_smt_resu
 ##############################################
 # Mini SMT Graphs combined Plotting
 ##############################################
-def plot_concatenated_qtl_significance(df, trait_name, significance_level=0.05, output_dir="Results/SMT/SMT_Concatenated"):
+def plot_concatenated_qtl_significance(df, trait_name, significance_level=0.05, output_dir="Results/SMT/Plots"):
     """
     Concatenated QTL significance across chromosomes for a given trait.
     Each chromosome is plotted as a separate category on the x-axis.
@@ -303,7 +319,7 @@ def plot_concatenated_qtl_significance(df, trait_name, significance_level=0.05, 
 
     return output_file  # so we can reuse it for merging later
 
-def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/SMT_Concatenated", final_pdf="Results/SMT/SMT_Concatenated/final_smt_concatenated.pdf"):
+def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/Plots", final_pdf="Results/SMT/Plots/final_smt_plots.pdf"):
     """
     Generate concatenated QTL significance plots for all traits and merge into PDF.
     """
@@ -326,3 +342,88 @@ def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/SMT_C
     images = [Image.open(img).convert("RGB") for img in image_paths]
     images[0].save(final_pdf, save_all=True, append_images=images[1:])
     print(f"Concatenated PDF saved at: {final_pdf}")
+
+
+def plot_lod_curve(sim_results, chromosome_id, alpha=0.05, output_dir="Results/SIM/Plots"):
+    if chromosome_id not in sim_results:
+        print(f"Chromosome {chromosome_id} not found in results.")
+        return
+
+    os.makedirs(output_dir, exist_ok=True)
+    lod_threshold = chi2.ppf(1 - alpha, df=1) / (2 * math.log(10))
+
+    for trait_name, lod_points in sim_results[chromosome_id].items():
+        positions = [pos for pos, lod in lod_points]
+        lod_scores = [lod for pos, lod in lod_points]
+        if not positions:
+            continue
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(positions, lod_scores, label=f"LOD Curve: {trait_name}", color="navy")
+        plt.axhline(y=lod_threshold, color="black", linestyle="--", label=f"Threshold (\u03b1={alpha})")
+
+        max_lod = max(lod_scores)
+        max_pos = positions[lod_scores.index(max_lod)]
+        plt.axvline(x=max_pos, color="red", linestyle=":", label=f"Max LOD @ {max_pos:.1f} bp")
+        plt.text(max_pos, max_lod + 0.1, f"{max_lod:.2f}", ha='center', fontsize=8, color='red')
+
+        plt.xlabel("Position (bp)")
+        plt.ylabel("LOD Score")
+        plt.title(f"LOD Score Curve - {chromosome_id} - {trait_name}")
+        plt.legend()
+        plt.grid(True, linestyle=':', alpha=0.5)
+        plt.tight_layout()
+
+        save_path = os.path.join(output_dir, f"{chromosome_id}_{trait_name}_LOD_curve.png")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+def plot_all_lod_curves(sim_results, alpha=0.05, output_dir="Results/SIM/Plots"):
+    os.makedirs(output_dir, exist_ok=True)
+    pdf_dir = os.path.join(output_dir, "PdfPerTrait")
+    os.makedirs(pdf_dir, exist_ok=True)
+    lod_threshold = chi2.ppf(1 - alpha, df=1) / (2 * math.log(10))
+    trait_plots = {}
+
+    for chrom_id, traits_data in sim_results.items():
+        for trait_name, lod_points in traits_data.items():
+            positions = [pos for pos, lod in lod_points]
+            lod_scores = [lod for pos, lod in lod_points]
+            if not positions:
+                continue
+
+            plt.figure(figsize=(10, 5))
+            plt.plot(positions, lod_scores, label="LOD Curve", color="navy")
+            plt.axhline(y=lod_threshold, color="black", linestyle="--", label=f"Threshold (\u03b1={alpha})")
+
+            max_lod = max(lod_scores)
+            max_pos = positions[lod_scores.index(max_lod)]
+            plt.axvline(x=max_pos, color="red", linestyle=":", label=f"Max LOD @ {max_pos:.1f} bp")
+            plt.text(max_pos, max_lod + 0.1, f"{max_lod:.2f}", ha='center', fontsize=8, color='red')
+
+            plt.xlabel("Position (bp)")
+            plt.ylabel("LOD Score")
+            plt.title(f"LOD Curve - {chrom_id} - {trait_name}")
+            plt.legend()
+            plt.grid(True, linestyle=':', alpha=0.5)
+            plt.tight_layout()
+
+            png_path = os.path.join(output_dir, f"{chrom_id}_{trait_name}_LOD_curve.png")
+            plt.savefig(png_path)
+            print(f"Saved PNG: {png_path}")
+
+            if trait_name not in trait_plots:
+                trait_plots[trait_name] = []
+            trait_plots[trait_name].append(plt.gcf())
+            plt.close()
+
+    for trait_name, figures in trait_plots.items():
+        pdf_path = os.path.join(pdf_dir, f"{trait_name}_LOD_curves.pdf")
+        with PdfPages(pdf_path) as pdf:
+            for fig in figures:
+                pdf.savefig(fig)
+                plt.close(fig)
+        print(f"Saved PDF: {pdf_path}")
+
+

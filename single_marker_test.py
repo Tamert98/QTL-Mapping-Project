@@ -1,3 +1,4 @@
+
 """
 single_marker_test.py
 
@@ -106,7 +107,7 @@ def find_best_qtl(df, genetic_maps):
 
     return best_bp, best_cM
 
-def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/SMT/SMT_All_Traits"):
+def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/SMT/Reports"):
     """
     Runs SMT regression for all traits in the dataset.
 
@@ -131,3 +132,32 @@ def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/S
         results_per_trait[trait_name] = df
 
     return results_per_trait
+
+def get_best_marker_info(trait_name, results_per_trait, genetic_maps):
+    """
+    Returns the location (cM, bp) and p-value of the best marker for a given trait.
+    Args:
+        trait_name (str): The trait to look up.
+        results_per_trait (dict): {trait_name: DataFrame of SMT results}
+        genetic_maps (dict): Genetic maps for all chromosomes.
+    Returns:
+        tuple: (best_cM, best_bp, best_p)
+    """
+    df = results_per_trait[trait_name]
+    if df.empty:
+        return None, None, None, None
+    # Ensure '-log10(p)' column exists
+    if '-log10(p)' not in df.columns:
+        df['-log10(p)'] = -np.log10(df['p'])
+    best_row = df.loc[df['-log10(p)'].idxmax()]
+    best_chr = best_row['chrom']
+    best_bp = best_row['pos']
+    best_logp = best_row['-log10(p)']
+    best_cM = None
+    if best_chr in genetic_maps:
+        gmap = genetic_maps[best_chr]["genetic_map"]
+        for m in gmap:
+            if m["pos"] == best_bp:
+                best_cM = m["cM"]
+                break
+    return best_chr, best_cM, best_bp, best_logp

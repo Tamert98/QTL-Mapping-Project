@@ -40,8 +40,7 @@ from plot_utils import (
 from single_marker_test import (
     run_smt_regression_and_export,
     find_best_qtl,
-    run_smt_for_all_traits,
-    get_best_marker_info
+    run_smt_for_all_traits
 )
 
 from single_interval_mapping import run_sim_on_selected_markers
@@ -65,21 +64,41 @@ def main():
     global_xmax = compute_global_physical_max(genetic_maps_unfiltered)
 
     # Export Genetic Maps with unified X axis
-    generate_genetic_map_images_and_pdf(genetic_maps_unfiltered, global_xmax)
-    generate_filtered_genetic_map_images_and_pdf(genetic_maps_filtered, global_xmax)
+    #generate_genetic_map_images_and_pdf(genetic_maps_unfiltered, global_xmax)
+    # generate_filtered_genetic_map_images_and_pdf(genetic_maps_filtered, global_xmax)
+
+  # Print sample of filtered map before selecting SIM markers
+    print("Filtered genetic map sample:")
+    for chrom, data in genetic_maps_filtered.items():
+        if chrom.startswith("chr"):
+            markers = data["genetic_map"]
+            print(f"{chrom}: {len(markers)} markers, first few cM: {[m['cM'] for m in markers[:5]]}")
+            break
 
     # Generate evenly spaced markers from filtered genetic maps (3–5 cM apart)
     selected_markers = select_evenly_spaced_markers(genetic_maps_filtered, min_cm_spacing=1.0)
+    """selected_markers = {
+    chrom: data["genetic_map"]
+    for chrom, data in genetic_maps_filtered.items()
+}"""
+    # --- After selecting SIM markers ---
+   # Print sample after selection
+    """print("SIM markers (spaced) sample:")
+    for chrom, markers in selected_markers.items():
+        print(f"{chrom}: {len(markers)} markers, selected cM: {[m['cM'] for m in markers[:5]]}")
+        break"""
+
+
 
     # Generate pairwise recombination maps for heatmaps
     """pairwise_maps = {}
-    for chrom_id in genetic_maps_filtered:
+    for chrom_id in genetic_maps_unfiltered:
         pairwise = generate_pairwise_genetic_map(vcf_data, sample_names, chrom_id)
         if pairwise:
-            pairwise_maps[chrom_id] = pairwise
+            pairwise_maps[chrom_id] = pairwise"""
 
     # Export Heatmaps with unified X/Y axis
-    generate_heatmap_images_and_pdf(pairwise_maps)"""
+    #generate_heatmap_images_and_pdf(pairwise_maps)
 
     # Run SMT for selected trait
     #df = run_smt_regression_and_export(vcf_data, traits, trait_to_test, sample_names)
@@ -97,13 +116,11 @@ def main():
     #print(f"SMT PDF generated: {final_pdf_path}")
 
     # Run SMT for all traits and export combined QTL maps
-    all_smt_results = run_smt_for_all_traits(vcf_data, traits, sample_names)
+    # all_smt_results = run_smt_for_all_traits(vcf_data, traits, sample_names)
     #generate_concatenated_qtl_pdf(all_smt_results)
-    best_chr, best_cM, best_bp, best_logp = get_best_marker_info("TC25Me3", all_smt_results, genetic_maps_unfiltered)
-    print(f"Best QTL for TC25Me3: Chromosome = {best_chr}, cM = {best_cM}, BP = {best_bp}, -log10(p) = {best_logp}")
 
     #running the sim algorithim and getting the L,L0,q,LOD score in a list for each tarit 
-    """sim_results = run_sim_on_selected_markers(vcf_data, selected_markers, traits, sample_names)
+    sim_results = run_sim_on_selected_markers(vcf_data, selected_markers, traits, sample_names)
     for chrom, chrom_results in sim_results.items():
         print(f"Chromosome {chrom}:")
         for trait_name, results in chrom_results.items():
@@ -113,6 +130,6 @@ def main():
             break  # show only first trait for each chromosome
     # Assuming sim_results already computed
     plot_lod_curve(sim_results, chromosome_id='chr01')
-    plot_all_lod_curves(sim_results)"""
+    plot_all_lod_curves(sim_results)
 if __name__ == "__main__":
     main()
