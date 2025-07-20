@@ -107,7 +107,7 @@ def find_best_qtl(df, genetic_maps):
 
     return best_bp, best_cM
 
-def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/SMT/Reports"):
+def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/SMT/Reports", message_callback=None):
     """
     Runs SMT regression for all traits in the dataset.
 
@@ -116,6 +116,7 @@ def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/S
         traits (dict): Parsed traits {trait_name: {sample: value}}.
         sample_names (list): Sample IDs from VCF.
         output_dir (str): Directory where SMT CSV files will be saved.
+        message_callback (callable, optional): Function to call with status messages.
 
     Returns:
         dict: {trait_name: DataFrame of SMT results}
@@ -123,12 +124,21 @@ def run_smt_for_all_traits(vcf_data, traits, sample_names, output_dir="Results/S
     os.makedirs(output_dir, exist_ok=True)
     results_per_trait = {}
 
-    for trait_name in traits.keys():
-        print(f"Running SMT for trait: {trait_name}")
+    def send_message(msg):
+        if message_callback is not None:
+            message_callback(msg)
+        else:
+            print(msg)
+
+    trait_list = list(traits.keys())
+    total_traits = len(trait_list)
+    for idx, trait_name in enumerate(trait_list, 1):
+        send_message(f"Running SMT for trait: {trait_name}, trait {idx}/{total_traits}")
 
         output_csv = os.path.join(output_dir, f"smt_results_{trait_name}.csv")
         df = run_smt_regression_and_export(vcf_data, traits, trait_name, sample_names, output_csv=output_csv)
 
+        send_message(f"Saved SMT results to {output_csv}")
         results_per_trait[trait_name] = df
 
     return results_per_trait

@@ -319,29 +319,39 @@ def plot_concatenated_qtl_significance(df, trait_name, significance_level=0.05, 
 
     return output_file  # so we can reuse it for merging later
 
-def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/Plots", final_pdf="Results/SMT/Plots/final_smt_plots.pdf"):
+def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/Plots", final_pdf="Results/SMT/Plots/final_smt_plots.pdf", message_callback=None):
     """
     Generate concatenated QTL significance plots for all traits and merge into PDF.
+    message_callback: optional function to stream progress messages.
     """
     from PIL import Image
+
+    def send_message(msg):
+        if message_callback is not None:
+            message_callback(msg)
+        else:
+            print(msg)
 
     os.makedirs(output_dir, exist_ok=True)
     image_paths = []
 
-    for trait_name, df in all_smt_results.items():
-        print(f"Generating concatenated plot for trait: {trait_name}")
+    trait_list = list(all_smt_results.keys())
+    total_traits = len(trait_list)
+    for idx, trait_name in enumerate(trait_list, 1):
+        send_message(f"Generating concatenated plot for trait: {trait_name}, trait {idx}/{total_traits}")
+        df = all_smt_results[trait_name]
         img_path = plot_concatenated_qtl_significance(df, trait_name, output_dir=output_dir)
         if img_path:
             image_paths.append(img_path)
 
     if not image_paths:
-        print("No valid images generated for concatenated plots.")
+        send_message("No valid images generated for concatenated plots.")
         return
 
     # Merge into PDF
     images = [Image.open(img).convert("RGB") for img in image_paths]
     images[0].save(final_pdf, save_all=True, append_images=images[1:])
-    print(f"Concatenated PDF saved at: {final_pdf}")
+    send_message(f"Concatenated PDF saved at: {final_pdf}")
 
 
 def plot_lod_curve(sim_results, chromosome_id, alpha=0.05, output_dir="Results/SIM/Plots"):

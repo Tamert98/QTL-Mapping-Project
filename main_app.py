@@ -4,15 +4,18 @@ import os
 
 from gui_frames.file_selection_frame import FileSelectionFrame
 from gui_frames.loading_data_frame import LoadingDataFrame
-from gui_frames.smt_results_frame import SMTResultsFrame
+from gui_frames.smt_run_frame import SMTRunFrame
+from gui_frames.smt_view_results_frame import SMTViewResultsFrame
+from gui_frames.genetic_map_viewer_frame import GeneticMapViewerFrame
+from gui_frames.main_menu_frame import MainMenuFrame
 from gui_frames.file_format_window import open_format_window
 from styles import get_styles
 
-# === Theme & Styles ===
 current_mode = "dark"
 red_button_style = {}
 white_button_style = {}
 bg_image = None
+smt_completed = False
 
 def apply_styles_for_mode():
     global red_button_style, white_button_style
@@ -27,7 +30,6 @@ def toggle_theme():
     clear_main_widgets()
     setup_main_page()
 
-# === App Setup ===
 set_appearance_mode("dark")
 set_default_color_theme("blue")
 
@@ -66,7 +68,7 @@ def go_to_next_step(vcf_path, trait_path):
         app.traits = traits
         app.unfiltered_maps = unfiltered_maps
         app.filtered_maps = filtered_maps
-        launch_smt_results_frame()
+        launch_main_menu()
 
     clear_main_widgets()
     LoadingDataFrame(
@@ -74,23 +76,61 @@ def go_to_next_step(vcf_path, trait_path):
         vcf_path=vcf_path,
         trait_path=trait_path,
         on_done=after_loading_done,
+        on_back=launch_file_selection,
         styles={"red": red_button_style, "white": white_button_style}
     )
 
-def launch_smt_results_frame():
+def launch_main_menu():
     clear_main_widgets()
-    SMTResultsFrame(
+    MainMenuFrame(
+        master=app,
+        on_back=launch_file_selection,
+        on_view_maps=launch_map_viewer,
+        on_apply_smt=launch_smt_run_frame,
+        on_view_smt_results=launch_smt_view_results_frame,
+        styles={"red": red_button_style, "white": white_button_style},
+        smt_ready=smt_completed
+    )
+
+def launch_map_viewer():
+    clear_main_widgets()
+    GeneticMapViewerFrame(
+        master=app,
+        vcf_data=app.vcf_data,
+        styles={"red": red_button_style, "white": white_button_style},
+        on_back=launch_main_menu
+    )
+
+def launch_smt_run_frame():
+    clear_main_widgets()
+    SMTRunFrame(
         master=app,
         vcf_data=app.vcf_data,
         traits=app.traits,
         sample_names=app.sample_names,
-        genetic_maps_unfiltered=app.unfiltered_maps,
+        on_back=on_smt_run_done,
         styles={"red": red_button_style, "white": white_button_style}
+    )
+
+def on_smt_run_done(all_results):
+    global smt_completed
+    app.all_smt_results = all_results
+    smt_completed = True
+    launch_main_menu()
+
+def launch_smt_view_results_frame():
+    clear_main_widgets()
+    SMTViewResultsFrame(
+        master=app,
+        traits=app.traits,
+        all_smt_results=app.all_smt_results,
+        genetic_maps_unfiltered=app.unfiltered_maps,
+        styles={"red": red_button_style, "white": white_button_style},
+        on_back=launch_main_menu
     )
 
 def setup_main_page():
     global bg_image, title_label, text_box, theme_toggle_button
-
     width, height = 1100, 650
     app.update_idletasks()
     screen_width = app.winfo_screenwidth()
@@ -178,7 +218,6 @@ def setup_main_page():
     format_button.grid(row=0, column=0, padx=(0, 150))
     next_button.grid(row=0, column=1, padx=(0, 220))
 
-# === START ===
 apply_styles_for_mode()
 setup_main_page()
 app.mainloop()

@@ -50,8 +50,6 @@ def main():
     # Input paths and parameters
     vcf_path = os.path.join("Data", "cataglyphis.final.DZ (1).vcf")
     trait_path = os.path.join("Data", "traits.txt")
-    trait_to_test = "TC25Me3"
-    pvalue_cutoff = 0.05
 
     # Load data
     vcf_data, sample_names = parse_vcf_file(vcf_path)
@@ -88,19 +86,10 @@ def main():
     #generate_smt_chromosome_images(df, trait_to_test, significance_level=pvalue_cutoff)
     #final_pdf_path = stitch_smt_chromosome_images_pdf(trait_to_test)
 
-    # Plot genome-wide concatenated QTL map for selected trait
-    #plot_concatenated_qtl_significance(df, trait_to_test, significance_level=pvalue_cutoff)
-
-    # Report best QTL location found
-    #smtQtl_Bp, smtQtl_Cm = find_best_qtl(df, genetic_maps_unfiltered)
-    #print(f"Most significant QTL: BP = {smtQtl_Bp}, cM = {smtQtl_Cm}")
-    #print(f"SMT PDF generated: {final_pdf_path}")
-
     # Run SMT for all traits and export combined QTL maps
     all_smt_results = run_smt_for_all_traits(vcf_data, traits, sample_names)
-    #generate_concatenated_qtl_pdf(all_smt_results)
-    best_chr, best_cM, best_bp, best_logp = get_best_marker_info("TC25Me3", all_smt_results, genetic_maps_unfiltered)
-    print(f"Best QTL for TC25Me3: Chromosome = {best_chr}, cM = {best_cM}, BP = {best_bp}, -log10(p) = {best_logp}")
+    generate_concatenated_qtl_pdf(all_smt_results)
+    
 
     #running the sim algorithim and getting the L,L0,q,LOD score in a list for each tarit 
     """sim_results = run_sim_on_selected_markers(vcf_data, selected_markers, traits, sample_names)
@@ -114,5 +103,6 @@ def main():
     # Assuming sim_results already computed
     plot_lod_curve(sim_results, chromosome_id='chr01')
     plot_all_lod_curves(sim_results)"""
+    
 if __name__ == "__main__":
     main()
