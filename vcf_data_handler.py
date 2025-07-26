@@ -61,11 +61,9 @@ def parse_vcf_file(vcf_file_path):
     return vcf_data, sample_names
 
 
-
-# Generates a genetic map based on the VCF data and sample names.
-# Does not check the validity of the marker data (e.g., allele balance or missingness).
-def generate_genetic_map(vcf_data, sample_names):
-    genetic_maps = {}
+def generate_combined_genetic_maps(vcf_data, sample_names):
+    comparative_maps = {}     # cumulative cM distances
+    m0_distance_maps = {}     # distances from m0
 
     for chrom_id, chrom_data in vcf_data.items():
         markers = chrom_data["markers"]
@@ -78,13 +76,17 @@ def generate_genetic_map(vcf_data, sample_names):
         m0_i00 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "0/0")
         m0_i11 = sum(1 for name in sample_names if m0_samples.get(name, {}).get("GT") == "1/1")
 
-        genetic_map = [{
+        # Start both maps
+        comparative_map = [{
             "pos": m0["pos"],
             "cM": 0.0,
             "r": 0.0,
             "i00": m0_i00,
             "i11": m0_i11
         }]
+        m0_distance_map = [comparative_map[0].copy()]
+
+        total_cM = 0.0
 
         for m in markers[1:]:
             m_samples = m["samples"]
@@ -109,13 +111,15 @@ def generate_genetic_map(vcf_data, sample_names):
             mi_i11 = sum(1 for name in sample_names if m_samples.get(name, {}).get("GT") == "1/1")
 
             if known == 0:
-                genetic_map.append({
+                entry = {
                     "pos": m["pos"],
-                    "cM": genetic_map[-1]["cM"],
+                    "cM": total_cM,
                     "r": None,
                     "i00": mi_i00,
                     "i11": mi_i11
-                })
+                }
+                comparative_map.append(entry.copy())
+                m0_distance_map.append(entry.copy())
                 continue
 
             recomb_count = min(i01 + i10, i00 + i11)
@@ -126,7 +130,17 @@ def generate_genetic_map(vcf_data, sample_names):
             except ValueError:
                 distance = float('inf')
 
-            genetic_map.append({
+            total_cM += distance
+
+            comparative_map.append({
+                "pos": m["pos"],
+                "cM": total_cM,
+                "r": r,
+                "i00": mi_i00,
+                "i11": mi_i11
+            })
+
+            m0_distance_map.append({
                 "pos": m["pos"],
                 "cM": distance,
                 "r": r,
@@ -134,12 +148,18 @@ def generate_genetic_map(vcf_data, sample_names):
                 "i11": mi_i11
             })
 
-        genetic_maps[chrom_id] = {
+        comparative_maps[chrom_id] = {
             "length": chrom_data["length"],
-            "genetic_map": genetic_map
+            "genetic_map": comparative_map
         }
 
-    return genetic_maps
+        m0_distance_maps[chrom_id] = {
+            "length": chrom_data["length"],
+            "genetic_map": m0_distance_map
+        }
+
+    return comparative_maps, m0_distance_maps
+
 
 
 def is_good_genotype(gt_info, min_dp=30, min_gq=70, min_delta_pl=90):
@@ -167,8 +187,13 @@ def is_good_genotype(gt_info, min_dp=30, min_gq=70, min_delta_pl=90):
 
 
     
-def generate_genetic_map_filtered(vcf_data, sample_names):
-    genetic_maps = {}
+
+
+
+
+def generate_combined_genetic_maps_filtered(vcf_data, sample_names):
+    genetic_maps_m0 = {}
+    genetic_maps_comparative = {}
     n = len(sample_names)
     threshold = 0.25 * n
 
@@ -204,15 +229,27 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
         m0_i11 = sum(1 for name in sample_names
                      if is_good_genotype(m0_samples.get(name, {})) and m0_samples.get(name, {}).get("GT") == "1/1")
 
-        genetic_map = [{
+        map_m0 = []
+        map_comparative = []
+        cumulative_cM = 0.0
+
+        map_m0.append({
+            "pos": m0["pos"],
+            "cM": cumulative_cM,
+            "r": 0.0,
+            "i00": m0_i00,
+            "i11": m0_i11
+        })
+        map_comparative.append({
             "pos": m0["pos"],
             "cM": 0.0,
             "r": 0.0,
             "i00": m0_i00,
             "i11": m0_i11
-        }]
+        })
 
         m0_index = markers.index(m0)
+        prev_marker = m0
 
         for m in markers[m0_index + 1:]:
             m_samples = m["samples"]
@@ -228,7 +265,7 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
 
             i00 = i01 = i10 = i11 = known = 0
             for name in sample_names:
-                gt0_info = m0_samples.get(name, {})
+                gt0_info = prev_marker["samples"].get(name, {})
                 gt_info = m_samples.get(name, {})
                 if not (is_good_genotype(gt0_info) and is_good_genotype(gt_info)):
                     continue
@@ -248,9 +285,16 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
                         i11 += 1
 
             if known == 0:
-                genetic_map.append({
+                map_m0.append({
                     "pos": m["pos"],
-                    "cM": genetic_map[-1]["cM"],
+                    "cM": cumulative_cM,
+                    "r": None,
+                    "i00": mi_i00,
+                    "i11": mi_i11
+                })
+                map_comparative.append({
+                    "pos": m["pos"],
+                    "cM": 0.0,
                     "r": None,
                     "i00": mi_i00,
                     "i11": mi_i11
@@ -265,7 +309,15 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
             except ValueError:
                 distance = float('inf')
 
-            genetic_map.append({
+            cumulative_cM += distance
+            map_m0.append({
+                "pos": m["pos"],
+                "cM": cumulative_cM,
+                "r": r,
+                "i00": mi_i00,
+                "i11": mi_i11
+            })
+            map_comparative.append({
                 "pos": m["pos"],
                 "cM": distance,
                 "r": r,
@@ -273,15 +325,20 @@ def generate_genetic_map_filtered(vcf_data, sample_names):
                 "i11": mi_i11
             })
 
-        if len(genetic_map) > 1:
-            genetic_maps[chrom_id] = {
+            prev_marker = m
+
+        if len(map_m0) > 1:
+            genetic_maps_m0[chrom_id] = {
                 "length": chrom_data["length"],
-                "genetic_map": genetic_map
+                "genetic_map": map_m0
+            }
+        if len(map_comparative) > 1:
+            genetic_maps_comparative[chrom_id] = {
+                "length": chrom_data["length"],
+                "genetic_map": map_comparative
             }
 
-    return genetic_maps
-
-
+    return genetic_maps_m0, genetic_maps_comparative
 
 def generate_pairwise_genetic_map(vcf_data, sample_names, chrom_id):
     n = len(sample_names)
@@ -429,10 +486,10 @@ def parse_trait_file(trait_file_path):
 
     return sample_names, traits
 
-def select_evenly_spaced_markers(genetic_maps_filtered, min_cm_spacing=3.0):
+def select_evenly_spaced_markers(genetic_maps_filtered, vcf_data, min_cm_spacing=3.0):
     """
-    Select markers spaced at least `min_cm_spacing` cM apart in each chromosome
-    that starts with 'chr'. Only uses the 'genetic_map' list.
+    Select markers spaced at least `min_cm_spacing` cM apart in each chromosome.
+    Keeps 'pos', 'cM', and 'samples' per marker by looking up samples from vcf_data.
 
     Parameters:
         genetic_maps_filtered (dict): {
@@ -441,11 +498,16 @@ def select_evenly_spaced_markers(genetic_maps_filtered, min_cm_spacing=3.0):
                 'genetic_map': [ { 'pos': ..., 'cM': ..., ... }, ... ]
             }, ...
         }
+        vcf_data (dict): {
+            'chr01': {
+                'markers': [ { 'pos': ..., 'samples': {...} }, ... ]
+            }, ...
+        }
         min_cm_spacing (float): Minimum cM spacing between markers.
 
     Returns:
         dict: {
-            'chr01': [ {marker1}, {marker2}, ... ],
+            'chr01': [ { 'pos': ..., 'cM': ..., 'samples': ... }, ... ],
             ...
         }
     """
@@ -455,20 +517,27 @@ def select_evenly_spaced_markers(genetic_maps_filtered, min_cm_spacing=3.0):
         if not chrom.lower().startswith("chr"):
             continue
 
-        marker_list = chrom_data.get("genetic_map", [])
-        if not marker_list:
-            continue
+        genetic_map = chrom_data.get("genetic_map", [])
+        vcf_markers = {m["pos"]: m for m in vcf_data.get(chrom, {}).get("markers", [])}
 
         selected = []
         last_cm = -float("inf")
 
-        for marker in marker_list:
+        for marker in genetic_map:
             cm = marker.get("cM")
-            if cm is None or not isinstance(cm, (float, int)):
+            pos = marker.get("pos")
+            if cm is None or pos is None or not isinstance(cm, (float, int)):
                 continue
+
             if cm - last_cm >= min_cm_spacing:
-                selected.append(marker)
-                last_cm = cm
+                vcf_marker = vcf_markers.get(pos)
+                if vcf_marker and "samples" in vcf_marker:
+                    selected.append({
+                        "pos": pos,
+                        "cM": cm,
+                        "samples": vcf_marker["samples"]
+                    })
+                    last_cm = cm
 
         if selected:
             spaced_markers[chrom] = selected

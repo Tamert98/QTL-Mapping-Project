@@ -1,21 +1,20 @@
 from customtkinter import *
 from PIL import Image
 import os
+import threading
 
 from gui_frames.file_selection_frame import FileSelectionFrame
 from gui_frames.loading_data_frame import LoadingDataFrame
-from gui_frames.smt_run_frame import SMTRunFrame
-from gui_frames.smt_view_results_frame import SMTViewResultsFrame
-from gui_frames.genetic_map_viewer_frame import GeneticMapViewerFrame
-from gui_frames.main_menu_frame import MainMenuFrame
+from gui_frames.smt_sim_runframe import SMT_SIM_RunFrame
+from gui_frames.view_results_frame import ViewResultsFrame
 from gui_frames.file_format_window import open_format_window
 from styles import get_styles
 
+# === Global Style & Theme ===
 current_mode = "dark"
 red_button_style = {}
 white_button_style = {}
 bg_image = None
-smt_completed = False
 
 def apply_styles_for_mode():
     global red_button_style, white_button_style
@@ -30,6 +29,7 @@ def toggle_theme():
     clear_main_widgets()
     setup_main_page()
 
+# === App Setup ===
 set_appearance_mode("dark")
 set_default_color_theme("blue")
 
@@ -52,83 +52,75 @@ def clear_main_widgets():
     for widget in app.winfo_children():
         widget.destroy()
 
+# === Flow Functions ===
 def launch_file_selection():
     clear_main_widgets()
     FileSelectionFrame(
         master=app,
         on_back=setup_main_page,
         on_next=go_to_next_step,
-        styles={"red": red_button_style, "white": white_button_style}
+        styles={"red": white_button_style, "white": white_button_style}
     )
 
 def go_to_next_step(vcf_path, trait_path):
-    def after_loading_done(vcf_data, sample_names, traits, unfiltered_maps, filtered_maps):
-        app.vcf_data = vcf_data
-        app.sample_names = sample_names
-        app.traits = traits
-        app.unfiltered_maps = unfiltered_maps
-        app.filtered_maps = filtered_maps
-        launch_main_menu()
-
     clear_main_widgets()
-    LoadingDataFrame(
+    frame = LoadingDataFrame(
         master=app,
         vcf_path=vcf_path,
         trait_path=trait_path,
-        on_done=after_loading_done,
         on_back=launch_file_selection,
-        styles={"red": red_button_style, "white": white_button_style}
+        styles={"red": white_button_style, "white": white_button_style},
+        on_sim_done=on_sim_run_done
+    )
+    # Store parsed data for later use
+    app.vcf_data = frame.vcf_data
+    app.sample_names = frame.sample_names
+    app.traits = frame.traits
+    app.selected_markers = frame.selected_markers
+    app.genetic_maps_unfiltered = frame.unfiltered_maps  # ✅ added
+
+def on_sim_run_done(sim_results, smt_results, vcf_data, traits, sample_names, selected_markers, genetic_maps_unfiltered):
+    app.sim_results = sim_results
+    app.smt_results = smt_results
+    app.vcf_data = vcf_data
+    app.traits = traits
+    app.sample_names = sample_names
+    app.selected_markers = selected_markers
+    app.genetic_maps_unfiltered = genetic_maps_unfiltered  # ✅ added
+
+    show_view_results(
+        sim_results=sim_results,
+        smt_results=smt_results,
+        vcf_data=vcf_data,
+        traits=traits,
+        sample_names=sample_names,
+        selected_markers=selected_markers,
+        genetic_maps_unfiltered=genetic_maps_unfiltered  # ✅ passed
     )
 
-def launch_main_menu():
+def show_view_results(sim_results, smt_results, vcf_data, traits, sample_names, selected_markers, genetic_maps_unfiltered):
     clear_main_widgets()
-    MainMenuFrame(
+    ViewResultsFrame(
         master=app,
-        on_back=launch_file_selection,
-        on_view_maps=launch_map_viewer,
-        on_apply_smt=launch_smt_run_frame,
-        on_view_smt_results=launch_smt_view_results_frame,
-        styles={"red": red_button_style, "white": white_button_style},
-        smt_ready=smt_completed
+        sim_results=sim_results,
+        smt_results=smt_results,
+        vcf_data=vcf_data,
+        traits=traits,
+        sample_names=sample_names,
+        selected_markers=selected_markers,
+        genetic_maps_unfiltered=genetic_maps_unfiltered,  # ✅ Pass it here
+        go_back_callback=lambda: show_view_results(
+            app.sim_results,
+            app.smt_results,
+            app.vcf_data,
+            app.traits,
+            app.sample_names,
+            app.selected_markers,
+            app.genetic_maps_unfiltered
+        )
     )
 
-def launch_map_viewer():
-    clear_main_widgets()
-    GeneticMapViewerFrame(
-        master=app,
-        vcf_data=app.vcf_data,
-        styles={"red": red_button_style, "white": white_button_style},
-        on_back=launch_main_menu
-    )
-
-def launch_smt_run_frame():
-    clear_main_widgets()
-    SMTRunFrame(
-        master=app,
-        vcf_data=app.vcf_data,
-        traits=app.traits,
-        sample_names=app.sample_names,
-        on_back=on_smt_run_done,
-        styles={"red": red_button_style, "white": white_button_style}
-    )
-
-def on_smt_run_done(all_results):
-    global smt_completed
-    app.all_smt_results = all_results
-    smt_completed = True
-    launch_main_menu()
-
-def launch_smt_view_results_frame():
-    clear_main_widgets()
-    SMTViewResultsFrame(
-        master=app,
-        traits=app.traits,
-        all_smt_results=app.all_smt_results,
-        genetic_maps_unfiltered=app.unfiltered_maps,
-        styles={"red": red_button_style, "white": white_button_style},
-        on_back=launch_main_menu
-    )
-
+# === Main Page UI ===
 def setup_main_page():
     global bg_image, title_label, text_box, theme_toggle_button
     width, height = 1100, 650
@@ -212,12 +204,13 @@ def setup_main_page():
         width=200,
         height=50,
         command=launch_file_selection,
-        **red_button_style
+        **white_button_style
     )
 
     format_button.grid(row=0, column=0, padx=(0, 150))
     next_button.grid(row=0, column=1, padx=(0, 220))
 
+# === Start App ===
 apply_styles_for_mode()
 setup_main_page()
 app.mainloop()

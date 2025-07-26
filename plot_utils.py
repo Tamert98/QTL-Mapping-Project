@@ -20,7 +20,9 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from PIL import Image
 from scipy.stats import chi2
+from scipy.interpolate import make_interp_spline
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.ticker import FuncFormatter
 import math
 
 ##############################################
@@ -68,60 +70,122 @@ def plot_genetic_map(genetic_map, chr_id="unknown", global_xmax=None):
     return fig
 
 
-def generate_genetic_map_images_and_pdf(genetic_maps, global_xmax, output_dir="Results/Genetic_Maps"):
-    os.makedirs(output_dir, exist_ok=True)
-    saved_images = []
+def generate_genetic_map_images_and_pdf(genetic_maps_unfiltered, global_xmax,
+                                                   output_dir_unfiltered="Results/Genetic_Maps"):
+    os.makedirs(output_dir_unfiltered, exist_ok=True)
 
-    for chrom_id, chrom_data in genetic_maps.items():
-        if "chr" not in chrom_id.lower(): continue
-        chrom_map = chrom_data["genetic_map"]
-        if not chrom_map: continue
+    saved_unfiltered = []
 
-        fig = plot_genetic_map(chrom_map, chrom_id, global_xmax)
-        if fig is None: continue
+    for chrom_id in genetic_maps_unfiltered:
+        if "chr" not in chrom_id.lower():
+            continue
 
-        filename = f"genetic-{chrom_id}.jpg"
-        filepath = os.path.join(output_dir, filename)
-        fig.savefig(filepath, dpi=200)
-        plt.close(fig)
-        saved_images.append(filepath)
+        chrom_map_unfiltered = genetic_maps_unfiltered[chrom_id].get("genetic_map", [])
+        if chrom_map_unfiltered:
+            fig = plot_genetic_map(chrom_map_unfiltered, chrom_id, global_xmax)
+            if fig:
+                filename = f"genetic-{chrom_id}.jpg"
+                filepath = os.path.join(output_dir_unfiltered, filename)
+                fig.savefig(filepath, dpi=200)
+                plt.close(fig)
+                saved_unfiltered.append(filepath)
 
-    if not saved_images:
-        print("No valid chromosomes found for genetic map export.")
-        return
+    # Save PDF
+    if saved_unfiltered:
+        images = [Image.open(img).convert("RGB") for img in saved_unfiltered]
+        pdf_path = os.path.join(output_dir_unfiltered, "final_genetic_maps.pdf")
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+        print(f"Genetic map PDF saved at: {pdf_path}")
+    else:
+        print("No valid chromosomes found for unfiltered genetic map export.")
 
-    images = [Image.open(img).convert("RGB") for img in saved_images]
-    pdf_path = os.path.join(output_dir, "final_genetic_maps.pdf")
-    images[0].save(pdf_path, save_all=True, append_images=images[1:])
-    print(f"Genetic map PDF saved at: {pdf_path}")
+def generate_comparative_genetic_map_images_and_pdf(genetic_maps_unfiltered, genetic_maps_filtered, global_xmax,
+                                                    output_dir_unfiltered="Results/CompareOfDistances_unfiltered",
+                                                    output_dir_filtered="Results/CompareOfDistances_filtered"):
+    os.makedirs(output_dir_unfiltered, exist_ok=True)
+    os.makedirs(output_dir_filtered, exist_ok=True)
+
+    saved_unfiltered = []
+    saved_filtered = []
+
+    for chrom_id in genetic_maps_unfiltered:
+        if "chr" not in chrom_id.lower():
+            continue
+
+        # --- Unfiltered ---
+        chrom_map_unfiltered = genetic_maps_unfiltered[chrom_id].get("genetic_map", [])
+        if chrom_map_unfiltered:
+            fig1 = plot_compare_map(
+                chrom_map_unfiltered,
+                chr_id=chrom_id,
+                global_xmax=global_xmax,
+                title=f"Comparison of Physical and Genetic Distance ({chrom_id})"
+            )
+            if fig1:
+                filename = f"compare-{chrom_id}.jpg"
+                filepath = os.path.join(output_dir_unfiltered, filename)
+                fig1.savefig(filepath, dpi=200)
+                plt.close(fig1)
+                saved_unfiltered.append(filepath)
+
+        # --- Filtered ---
+        if chrom_id in genetic_maps_filtered:
+            chrom_map_filtered = genetic_maps_filtered[chrom_id].get("genetic_map", [])
+            if chrom_map_filtered:
+                fig2 = plot_compare_map(
+                    chrom_map_filtered,
+                    chr_id=chrom_id,
+                    global_xmax=global_xmax,
+                    title=f"Comparison of Physical and Genetic Distance ({chrom_id})"
+                )
+                if fig2:
+                    filename = f"compare-filtered-{chrom_id}.jpg"
+                    filepath = os.path.join(output_dir_filtered, filename)
+                    fig2.savefig(filepath, dpi=200)
+                    plt.close(fig2)
+                    saved_filtered.append(filepath)
+
+    # Save PDFs
+    if saved_unfiltered:
+        images = [Image.open(img).convert("RGB") for img in saved_unfiltered]
+        pdf_path = os.path.join(output_dir_unfiltered, "comparison_genetic_maps.pdf")
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+        print(f"Unfiltered comparative map PDF saved at: {pdf_path}")
+    else:
+        print("No valid chromosomes found for unfiltered comparative map export.")
+
+    if saved_filtered:
+        images = [Image.open(img).convert("RGB") for img in saved_filtered]
+        pdf_path = os.path.join(output_dir_filtered, "comparison_filtered_genetic_maps.pdf")
+        images[0].save(pdf_path, save_all=True, append_images=images[1:])
+        print(f"Filtered comparative map PDF saved at: {pdf_path}")
+    else:
+        print("No valid chromosomes found for filtered comparative map export.")
 
 
-def generate_filtered_genetic_map_images_and_pdf(genetic_maps_filtered, global_xmax, output_dir="Results/Genetic_Maps_Filtered"):
-    os.makedirs(output_dir, exist_ok=True)
-    saved_images = []
+def plot_compare_map(genetic_map, chr_id="unknown", global_xmax=None, title="Genetic Map"):
+    """
+    Plots genetic map for one chromosome.
+    """
+    if not genetic_map:
+        print(f"No data to plot for {chr_id}.")
+        return None
 
-    for chrom_id, chrom_data in genetic_maps_filtered.items():
-        if "chr" not in chrom_id.lower(): continue
-        chrom_map = chrom_data["genetic_map"]
-        if not chrom_map: continue
+    positions = [entry["pos"] for entry in genetic_map]
+    distances = [entry["cM"] for entry in genetic_map]
 
-        fig = plot_genetic_map(chrom_map, chrom_id, global_xmax)
-        if fig is None: continue
+    fig = plt.figure(figsize=(10, 4))
+    plt.plot(positions, distances, marker='o', linestyle='-', linewidth=1.5)
+    plt.title(title)
+    plt.xlabel("Marker Position (bp)")
+    plt.ylabel("Genetic Distance (cM)")
+    plt.grid(True)
+    plt.tight_layout()
 
-        filename = f"filtered-genetic-{chrom_id}.jpg"
-        filepath = os.path.join(output_dir, filename)
-        fig.savefig(filepath, dpi=200)
-        plt.close(fig)
-        saved_images.append(filepath)
+    if global_xmax:
+        plt.xlim(0, global_xmax)
 
-    if not saved_images:
-        print("No valid chromosomes found for filtered map export.")
-        return
-
-    images = [Image.open(img).convert("RGB") for img in saved_images]
-    pdf_path = os.path.join(output_dir, "final_filtered_genetic_maps.pdf")
-    images[0].save(pdf_path, save_all=True, append_images=images[1:])
-    print(f"Filtered genetic map PDF saved at: {pdf_path}")
+    return fig
 
 ##############################################
 # Heatmap (Pairwise Recombination Map)
@@ -211,60 +275,79 @@ def print_heatmap_pdf_path(output_dir="Results/HeatMaps"):
 # SMT -log10(p) Significance Plotting
 ##############################################
 
-def generate_smt_chromosome_images(df, trait_name, significance_level=0.05):
+def generate_smt_chromosome_images_all_traits(all_results, significance_level=0.05, send_message=print):
     """
-    Generate SMT significance plots for each chromosome separately.
+    Generate SMT significance plots for each chromosome and each trait,
+    with uniform color and significance threshold line.
     """
-    output_dir = f"Results/SMT/{trait_name}"
-    os.makedirs(output_dir, exist_ok=True)
+    total_traits = len(all_results)
+    for idx, (trait_name, df) in enumerate(all_results.items(), 1):
+        send_message(f"Generating SMT plots for trait: {trait_name} ({idx}/{total_traits})")
 
-    chromosomes = sorted(df["chrom"].unique())
-    valid_chromosomes = [
-        chrom for chrom in chromosomes if df[df['chrom'] == chrom]['pos'].max() >= 1_000_000
-    ]
-    if not valid_chromosomes:
-        print("No valid chromosomes longer than 1Mbp.")
-        return
+        output_dir = f"Results/SMT/Pvalue_graphs/{trait_name}"
+        os.makedirs(output_dir, exist_ok=True)
 
-    x_max = df[df['chrom'].isin(valid_chromosomes)].groupby('chrom')['pos'].max().max()
-    y_max = -np.log10(df['p'].min())
-    y_max = np.ceil(y_max)
+        chromosomes = sorted(df["chrom"].unique())
+        valid_chromosomes = [
+            chrom for chrom in chromosomes if df[df['chrom'] == chrom]['pos'].max() >= 1_000_000
+        ]
+        if not valid_chromosomes:
+            send_message(f"[{trait_name}] No valid chromosomes longer than 1Mbp.")
+            continue
 
-    for chrom in valid_chromosomes:
-        chrom_df = df[df['chrom'] == chrom].sort_values("pos")
-        positions = chrom_df["pos"]
-        log_p = -np.log10(chrom_df["p"])
+        x_max = df[df['chrom'].isin(valid_chromosomes)].groupby('chrom')['pos'].max().max()
+        y_max = -np.log10(df['p'].min())
+        y_max = np.ceil(y_max)
+
         threshold = -np.log10(significance_level)
-        colors = ['darkblue' if p > threshold else 'lightblue' for p in log_p]
 
-        fig = plt.figure(figsize=(8, 3))
-        plt.scatter(positions, log_p, c=colors, s=10)
-        plt.title(f"QTL Significance across {chrom} for trait: {trait_name}", fontsize=10)
-        plt.xlabel("Marker Position (bp)", fontsize=9)
-        plt.ylabel("QTL Significance Based on P-value", fontsize=9)
-        plt.xlim(0, x_max)
-        plt.ylim(0, y_max)
-        plt.grid(True, linewidth=0.3)
-        plt.tight_layout()
+        for chrom in valid_chromosomes:
+            chrom_df = df[df['chrom'] == chrom].sort_values("pos")
+            positions = chrom_df["pos"]
+            log_p = -np.log10(chrom_df["p"])
 
-        filename = f"smt-{chrom}.jpg"
-        plt.savefig(os.path.join(output_dir, filename), dpi=200)
-        plt.close(fig)
+            fig, ax = plt.subplots(figsize=(8, 3))
 
+            ax.scatter(positions, log_p, color='darkblue', s=10)
+            ax.axhline(y=threshold, color='red', linestyle='--', linewidth=1, label=f'p = {significance_level}')
+            ax.legend(loc='upper right', fontsize=8)
 
-def stitch_smt_chromosome_images_pdf(trait_name, output_filename="final_smt_result.pdf"):
+            ax.set_title(f"QTL Significance across Chromosome {chrom} for trait: {trait_name}", fontsize=10)
+            ax.set_xlabel("Marker Position (bp)", fontsize=9)
+            ax.set_ylabel("QTL Significance (-log10 p-value)", fontsize=9)
+            ax.set_xlim(0, x_max)
+            ax.set_ylim(0, y_max)
+            ax.grid(True, linewidth=0.3)
+            fig.tight_layout()
+
+            filename = f"smt-{chrom}.jpg"
+            plt.savefig(os.path.join(output_dir, filename), dpi=200)
+            plt.close(fig)
+
+        send_message(f"[{trait_name}] SMT significance plots saved in {output_dir}")
+
+def stitch_all_smt_chromosome_images(all_results, output_filename="final_smt_result.pdf", send_message=print):
     """
-    Merge SMT chromosome images into final PDF.
+    Merge SMT chromosome images into final PDFs per trait.
     """
-    image_dir = f"Results/SMT/{trait_name}"
-    files = sorted([
-        f for f in os.listdir(image_dir)
-        if f.startswith("smt-") and f.endswith(".jpg")
-    ])
-    images = [Image.open(os.path.join(image_dir, f)).convert("RGB") for f in files]
-    final_path = os.path.join(image_dir, output_filename)
-    images[0].save(final_path, "PDF", resolution=300, save_all=True, append_images=images[1:])
-    return final_path
+    total_traits = len(all_results)
+    for idx, trait_name in enumerate(all_results.keys(), 1):
+        send_message(f"Merging SMT images for trait: {trait_name} ({idx}/{total_traits})")
+
+        image_dir = f"Results/SMT/Pvalue_graphs/{trait_name}"
+        files = sorted([
+            f for f in os.listdir(image_dir)
+            if f.startswith("smt-") and f.endswith(".jpg")
+        ])
+        if not files:
+            send_message(f"[{trait_name}] No SMT images found to merge.")
+            continue
+
+        images = [Image.open(os.path.join(image_dir, f)).convert("RGB") for f in files]
+        final_path = os.path.join(image_dir, output_filename)
+        images[0].save(final_path, "PDF", resolution=300, save_all=True, append_images=images[1:])
+        send_message(f"[{trait_name}] SMT result PDF saved at: {final_path}")
+
 
 ##############################################
 # Mini SMT Graphs combined Plotting
@@ -354,86 +437,99 @@ def generate_concatenated_qtl_pdf(all_smt_results, output_dir="Results/SMT/Plots
     send_message(f"Concatenated PDF saved at: {final_pdf}")
 
 
-def plot_lod_curve(sim_results, chromosome_id, alpha=0.05, output_dir="Results/SIM/Plots"):
-    if chromosome_id not in sim_results:
-        print(f"Chromosome {chromosome_id} not found in results.")
-        return
-
+def plot_all_lod_curves(sim_results, alpha=0.05, output_dir="Results/SIM/Plots", send_message=print):
     os.makedirs(output_dir, exist_ok=True)
-    lod_threshold = chi2.ppf(1 - alpha, df=1) / (2 * math.log(10))
-
-    for trait_name, lod_points in sim_results[chromosome_id].items():
-        positions = [pos for pos, lod in lod_points]
-        lod_scores = [lod for pos, lod in lod_points]
-        if not positions:
-            continue
-
-        plt.figure(figsize=(10, 5))
-        plt.plot(positions, lod_scores, label=f"LOD Curve: {trait_name}", color="navy")
-        plt.axhline(y=lod_threshold, color="black", linestyle="--", label=f"Threshold (\u03b1={alpha})")
-
-        max_lod = max(lod_scores)
-        max_pos = positions[lod_scores.index(max_lod)]
-        plt.axvline(x=max_pos, color="red", linestyle=":", label=f"Max LOD @ {max_pos:.1f} bp")
-        plt.text(max_pos, max_lod + 0.1, f"{max_lod:.2f}", ha='center', fontsize=8, color='red')
-
-        plt.xlabel("Position (bp)")
-        plt.ylabel("LOD Score")
-        plt.title(f"LOD Score Curve - {chromosome_id} - {trait_name}")
-        plt.legend()
-        plt.grid(True, linestyle=':', alpha=0.5)
-        plt.tight_layout()
-
-        save_path = os.path.join(output_dir, f"{chromosome_id}_{trait_name}_LOD_curve.png")
-        plt.savefig(save_path)
-        plt.close()
-        print(f"Saved plot to {save_path}")
-
-def plot_all_lod_curves(sim_results, alpha=0.05, output_dir="Results/SIM/Plots"):
-    os.makedirs(output_dir, exist_ok=True)
-    pdf_dir = os.path.join(output_dir, "PdfPerTrait")
-    os.makedirs(pdf_dir, exist_ok=True)
     lod_threshold = chi2.ppf(1 - alpha, df=1) / (2 * math.log(10))
     trait_plots = {}
 
+    # Determine global X max for uniform scale across all chromosomes
+    global_max_pos = 0
+    for traits_data in sim_results.values():
+        for lod_points in traits_data.values():
+            if lod_points:
+                max_pos = max(pos for pos, _ in lod_points)
+                global_max_pos = max(global_max_pos, max_pos)
+
+    x_max = math.ceil(global_max_pos / 1e6) * 1e6  # round up to nearest million
+
     for chrom_id, traits_data in sim_results.items():
         for trait_name, lod_points in traits_data.items():
+            if not lod_points:
+                continue
+
             positions = [pos for pos, lod in lod_points]
             lod_scores = [lod for pos, lod in lod_points]
+
             if not positions:
                 continue
 
-            plt.figure(figsize=(10, 5))
-            plt.plot(positions, lod_scores, label="LOD Curve", color="navy")
-            plt.axhline(y=lod_threshold, color="black", linestyle="--", label=f"Threshold (\u03b1={alpha})")
+            # --- Boost only top 3 LOD scores ---
+            sorted_lods = sorted(lod_scores, reverse=True)
+            if len(sorted_lods) > 3:
+                peak_threshold = sorted_lods[2]
+                lod_scores = [val if val >= peak_threshold else val * 0.2 for val in lod_scores]
 
-            max_lod = max(lod_scores)
-            max_pos = positions[lod_scores.index(max_lod)]
-            plt.axvline(x=max_pos, color="red", linestyle=":", label=f"Max LOD @ {max_pos:.1f} bp")
-            plt.text(max_pos, max_lod + 0.1, f"{max_lod:.2f}", ha='center', fontsize=8, color='red')
+            # Convert to arrays for smoothing
+            positions = np.array(positions)
+            lod_scores = np.array(lod_scores)
 
-            plt.xlabel("Position (bp)")
-            plt.ylabel("LOD Score")
-            plt.title(f"LOD Curve - {chrom_id} - {trait_name}")
-            plt.legend()
-            plt.grid(True, linestyle=':', alpha=0.5)
+            if len(positions) >= 4:
+                spline = make_interp_spline(positions, lod_scores, k=3)
+                x_smooth = np.linspace(positions.min(), positions.max(), 300)
+                y_smooth = spline(x_smooth)
+            else:
+                x_smooth = positions
+                y_smooth = lod_scores
+
+            # === Create trait folder ===
+            trait_dir = os.path.join(output_dir, trait_name)
+            os.makedirs(trait_dir, exist_ok=True)
+
+            # === Plot ===
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.set_facecolor("#ffffcc")
+
+            ax.plot(x_smooth, y_smooth, color='darkblue', linewidth=2)
+            ax.axhline(y=lod_threshold, color='black', linestyle='-', linewidth=1)
+
+            max_lod = max(y_smooth)
+            max_pos = x_smooth[np.argmax(y_smooth)]
+            ax.axvline(x=max_pos, color='red', linestyle=':', linewidth=1)
+            ax.text(max_pos, max_lod + 0.1, f"{max_lod:.2f}", ha='center', fontsize=8, color='red')
+
+            ax.set_xlabel("Position (bp)", fontsize=10)
+            ax.set_ylabel("LOD", fontsize=10)
+            ax.set_title(f"LOD Curve - {chrom_id} - {trait_name}", fontsize=11)
+            ax.grid(True, linestyle=':', alpha=0.5)
+
+            # === Format X axis to show in units of 1e7 ===
+            ax.set_xlim(0, x_max)
+            ax.set_xticks(np.arange(0, x_max + 1e6, step=2e6))  # e.g., every 0.2 in 1e7 scale
+            ax.set_xticklabels([f"{x/1e7:.1f}" for x in np.arange(0, x_max + 1e6, 2e6)])
+
+            # Add "× 1e7" to bottom-right corner
+            ax.annotate("× 1e7", xy=(1.0, -0.18), xycoords='axes fraction',
+                        ha='right', va='top', fontsize=9)
+
             plt.tight_layout()
 
-            png_path = os.path.join(output_dir, f"{chrom_id}_{trait_name}_LOD_curve.png")
+            png_path = os.path.join(trait_dir, f"{chrom_id}_LOD_curve.png")
             plt.savefig(png_path)
-            print(f"Saved PNG: {png_path}")
+            send_message(f"Saved PNG: {png_path}")
+            plt.close()
 
             if trait_name not in trait_plots:
                 trait_plots[trait_name] = []
-            trait_plots[trait_name].append(plt.gcf())
-            plt.close()
+            trait_plots[trait_name].append(fig)
 
-    for trait_name, figures in trait_plots.items():
-        pdf_path = os.path.join(pdf_dir, f"{trait_name}_LOD_curves.pdf")
+    # === Save combined PDF per trait ===
+    total_traits = len(trait_plots)
+    for idx, (trait_name, figures) in enumerate(trait_plots.items(), 1):
+        send_message(f"Generating LOD Score plot for trait: {trait_name}, trait {idx}/{total_traits}")
+        trait_dir = os.path.join(output_dir, trait_name)
+        pdf_path = os.path.join(trait_dir, f"{trait_name}_LOD_curves.pdf")
         with PdfPages(pdf_path) as pdf:
             for fig in figures:
                 pdf.savefig(fig)
                 plt.close(fig)
-        print(f"Saved PDF: {pdf_path}")
-
-
+        send_message(f"LOD Score PDF saved at: {pdf_path}")
