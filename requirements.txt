@@ -1,2 +1,5 @@
 numpy
-matplotlib 
+matplotlib
+scipy
+Pillow
+customtkinter

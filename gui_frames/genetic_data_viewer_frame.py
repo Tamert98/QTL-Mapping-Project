@@ -1,8 +1,35 @@
+# =============================================================================
+# genetic_map_viewer_frame.py
+#
+# GUI Frame for displaying chromosome-specific genetic maps or heatmaps.
+# Supports multiple modes: heatmap, compare, compare-filtered, and default map.
+# =============================================================================
+
 from customtkinter import *
 from PIL import Image as PILImage
 import os
 
+
 class GeneticMapViewerFrame(CTkFrame):
+    """
+    A CustomTkinter frame for displaying various genetic map visualizations
+    such as recombination heatmaps, filtered/unfiltered comparisons, and
+    chromosome-wide genetic maps.
+
+    Modes:
+        - "heatmap"
+        - "compare"
+        - "compare-filtered"
+        - "genetic" (default)
+
+    Parameters:
+        master (Tk): Parent window.
+        vcf_data (dict): Parsed VCF data.
+        styles (dict): Button style dictionary.
+        on_back (function): Callback for the back button.
+        mode (str): Visualization mode.
+    """
+
     def __init__(self, master, vcf_data, styles, on_back, mode):
         super().__init__(master, width=1100, height=850)
         self.master = master
@@ -19,34 +46,40 @@ class GeneticMapViewerFrame(CTkFrame):
         self.build_ui()
 
     def get_chromosomes_from_vcf(self, vcf_data):
+        """
+        Extract chromosomes that begin with 'chr' from VCF data.
+        """
         return [chrom for chrom in vcf_data.keys() if chrom.startswith("chr")]
 
     def build_ui(self):
+        """
+        Build and place all UI widgets.
+        """
+        # === Title Label ===
         self.title_label = CTkLabel(self, text="", font=("Segoe UI", 22, "bold"))
         self.title_label.pack(pady=(40, 20))
 
-        # Check if VCF data is missing
+        # === No Data Cases ===
         if not self.vcf_data:
-            CTkLabel(self, text="No VCF data available.",
-                     font=("Segoe UI", 16), text_color="red").pack(pady=20)
+            CTkLabel(self, text="No VCF data available.", font=("Segoe UI", 16), text_color="red").pack(pady=20)
             CTkButton(self, text="Back", font=("Segoe UI", 14, "bold"),
                       width=140, height=40, command=self.on_back,
                       **self.styles["white"]).place(x=20, y=50, anchor="nw")
             return
 
-        # Check if no chromosomes found
         if not self.chromosomes:
-            CTkLabel(self, text="No valid chromosomes found in VCF data.",
-                     font=("Segoe UI", 16), text_color="red").pack(pady=20)
+            CTkLabel(self, text="No valid chromosomes found in VCF data.", font=("Segoe UI", 16), text_color="red").pack(pady=20)
             CTkButton(self, text="Back", font=("Segoe UI", 14, "bold"),
                       width=140, height=40, command=self.on_back,
                       **self.styles["white"]).place(x=20, y=50, anchor="nw")
             return
 
+        # === Chromosome Selection ===
         selection_frame = CTkFrame(self, fg_color="transparent")
         selection_frame.pack(pady=10)
 
-        CTkLabel(selection_frame, text="Pick Chromosome From List", font=("Segoe UI", 16, "bold")).grid(row=0, column=0, padx=10, pady=(0, 10))
+        CTkLabel(selection_frame, text="Pick Chromosome From List", font=("Segoe UI", 16, "bold")) \
+            .grid(row=0, column=0, padx=10, pady=(0, 10))
 
         dropdown_style = {
             "fg_color": "#ffffff",
@@ -64,35 +97,49 @@ class GeneticMapViewerFrame(CTkFrame):
         )
         self.chrom_menu.grid(row=1, column=0, padx=10)
 
+        # === Image Display Area ===
         self.image_label = CTkLabel(self, text="")
         self.image_label.pack(pady=(20, 10))
 
+        # === Default Display for First Chromosome ===
         if self.chromosomes:
             self.chrom_selected.set(self.chromosomes[0])
             self.display_map(self.chromosomes[0])
 
+        # === Back Button ===
         CTkButton(self, text="Back", font=("Segoe UI", 14, "bold"),
                   width=140, height=40, command=self.on_back,
                   **self.styles["white"]).place(x=20, y=50, anchor="nw")
 
     def display_map(self, chrom):
+        """
+        Display the image corresponding to the selected chromosome and mode.
+
+        Parameters:
+            chrom (str): Chromosome identifier (e.g., "chr01")
+        """
         if not chrom:
             return
 
+        folder = ""
         filename = ""
+
         if self.mode == "heatmap":
             folder = "Results/HeatMaps"
             filename = f"heatmap-{chrom}.jpg"
             self.title_label.configure(text="Recombination Rate Heat Map")
+
         elif self.mode == "compare-filtered":
             folder = "Results/CompareOfDistances_filtered"
             filename = f"compare-filtered-{chrom}.jpg"
             self.title_label.configure(text="Filtered Genetic Map Comparison")
+
         elif self.mode == "compare":
             folder = "Results/CompareOfDistances_unfiltered"
             filename = f"compare-{chrom}.jpg"
             self.title_label.configure(text="Unfiltered Genetic Map Comparison")
-        else:  # default to "genetic"
+
+        else:
             folder = "Results/Genetic_Maps"
             filename = f"genetic-{chrom}.jpg"
             self.title_label.configure(text="Chromosome-wide Genetic Map")
@@ -103,6 +150,6 @@ class GeneticMapViewerFrame(CTkFrame):
             image = PILImage.open(path).resize((1000, 450))
             ctk_image = CTkImage(light_image=image, size=(1000, 450))
             self.image_label.configure(image=ctk_image, text="")
-            self.image_label.image = ctk_image
+            self.image_label.image = ctk_image  # keep reference to prevent GC
         else:
             self.image_label.configure(image=None, text=f"Image not found: {filename}")

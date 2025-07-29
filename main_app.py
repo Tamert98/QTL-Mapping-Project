@@ -1,8 +1,22 @@
+"""
+main_app.py
+
+Main GUI controller for the QTL Mapping Project using CustomTkinter.
+
+Responsibilities:
+- Initialize and theme the application window
+- Define transitions between GUI frames (file selection, loading, SMT/SIM, result viewing)
+- Pass parsed data between frames
+- Serve as the main entry point for the GUI
+"""
+
+# === Imports ===
 from customtkinter import *
 from PIL import Image
 import os
 import threading
 
+# === Internal Modules ===
 from gui_frames.file_selection_frame import FileSelectionFrame
 from gui_frames.loading_data_frame import LoadingDataFrame
 from gui_frames.smt_sim_runframe import SMT_SIM_RunFrame
@@ -10,26 +24,32 @@ from gui_frames.view_results_frame import ViewResultsFrame
 from gui_frames.file_format_window import open_format_window
 from styles import get_styles
 
-# === Global Style & Theme ===
+# === Global Theme and Style Configuration ===
 current_mode = "dark"
 red_button_style = {}
 white_button_style = {}
 bg_image = None
 
 def apply_styles_for_mode():
+    """
+    Apply global style dictionaries based on the current theme.
+    """
     global red_button_style, white_button_style
     styles = get_styles(current_mode)
     red_button_style = styles["red"]
     white_button_style = styles["white"]
 
 def toggle_theme():
+    """
+    Toggle between dark and light mode.
+    """
     global current_mode
     current_mode = "light" if current_mode == "dark" else "dark"
     set_appearance_mode(current_mode)
     clear_main_widgets()
     setup_main_page()
 
-# === App Setup ===
+# === App Initialization ===
 set_appearance_mode("dark")
 set_default_color_theme("blue")
 
@@ -48,12 +68,17 @@ try:
 except:
     print("Icon not found — skipping.")
 
+# === Utility ===
 def clear_main_widgets():
+    """Destroy all widgets in the main app window."""
     for widget in app.winfo_children():
         widget.destroy()
 
-# === Flow Functions ===
+# === Flow Control Functions ===
 def launch_file_selection():
+    """
+    Go to file selection frame.
+    """
     clear_main_widgets()
     FileSelectionFrame(
         master=app,
@@ -63,6 +88,9 @@ def launch_file_selection():
     )
 
 def go_to_next_step(vcf_path, trait_path):
+    """
+    Launch data loading after VCF and trait file selection.
+    """
     clear_main_widgets()
     frame = LoadingDataFrame(
         master=app,
@@ -77,16 +105,20 @@ def go_to_next_step(vcf_path, trait_path):
     app.sample_names = frame.sample_names
     app.traits = frame.traits
     app.selected_markers = frame.selected_markers
-    app.genetic_maps_unfiltered = frame.unfiltered_maps  # ✅ added
+    app.genetic_maps_unfiltered = frame.unfiltered_maps
 
 def on_sim_run_done(sim_results, smt_results, vcf_data, traits, sample_names, selected_markers, genetic_maps_unfiltered):
+    """
+    Callback after SMT and SIM finish running.
+    Stores results and transitions to results view.
+    """
     app.sim_results = sim_results
     app.smt_results = smt_results
     app.vcf_data = vcf_data
     app.traits = traits
     app.sample_names = sample_names
     app.selected_markers = selected_markers
-    app.genetic_maps_unfiltered = genetic_maps_unfiltered  # ✅ added
+    app.genetic_maps_unfiltered = genetic_maps_unfiltered
 
     show_view_results(
         sim_results=sim_results,
@@ -95,10 +127,13 @@ def on_sim_run_done(sim_results, smt_results, vcf_data, traits, sample_names, se
         traits=traits,
         sample_names=sample_names,
         selected_markers=selected_markers,
-        genetic_maps_unfiltered=genetic_maps_unfiltered  # ✅ passed
+        genetic_maps_unfiltered=genetic_maps_unfiltered
     )
 
 def show_view_results(sim_results, smt_results, vcf_data, traits, sample_names, selected_markers, genetic_maps_unfiltered):
+    """
+    Display the main results view after SMT and SIM complete.
+    """
     clear_main_widgets()
     ViewResultsFrame(
         master=app,
@@ -108,7 +143,7 @@ def show_view_results(sim_results, smt_results, vcf_data, traits, sample_names, 
         traits=traits,
         sample_names=sample_names,
         selected_markers=selected_markers,
-        genetic_maps_unfiltered=genetic_maps_unfiltered,  # ✅ Pass it here
+        genetic_maps_unfiltered=genetic_maps_unfiltered,
         go_back_callback=lambda: show_view_results(
             app.sim_results,
             app.smt_results,
@@ -120,24 +155,29 @@ def show_view_results(sim_results, smt_results, vcf_data, traits, sample_names, 
         )
     )
 
-# === Main Page UI ===
+# === Main Page UI Setup ===
 def setup_main_page():
+    """
+    Build and display the main welcome screen.
+    """
     global bg_image, title_label, text_box, theme_toggle_button
-    width, height = 1100, 650
+
+    clear_main_widgets()
+
+    # Center the app window again
     app.update_idletasks()
-    screen_width = app.winfo_screenwidth()
-    screen_height = app.winfo_screenheight()
     x = (screen_width // 2) - (width // 2)
     y = (screen_height // 2) - (height // 2) - 100
     app.geometry(f"{width}x{height}+{x}+{y}")
-    clear_main_widgets()
 
+    # Background image
     try:
         bg_image = CTkImage(light_image=Image.open("sideimg.png"), size=(250, 650))
         CTkLabel(app, image=bg_image, text="").place(x=0, y=0)
     except:
         print("Background image not found.")
 
+    # Theme toggle button
     theme_toggle_button = CTkButton(
         app,
         text="Apply Light Mode" if current_mode == "dark" else "Apply Dark Mode",
@@ -150,6 +190,7 @@ def setup_main_page():
     )
     theme_toggle_button.place(relx=1.0, x=-20, y=20, anchor="ne")
 
+    # Title
     title_label = CTkLabel(
         app,
         text="Welcome to the QTL Mapping Project",
@@ -158,6 +199,7 @@ def setup_main_page():
     )
     title_label.pack(pady=(20, 10), padx=(270, 20))
 
+    # Introduction text
     welcome_message = (
         "This project was developed by Tamer Talhami and Eyas Rizik.\n\n"
         "It focuses on identifying the DNA regions responsible for specific trait values "
@@ -184,6 +226,7 @@ def setup_main_page():
     text_box.configure(state="disabled")
     text_box.pack(pady=10, padx=(270, 20))
 
+    # Navigation buttons
     button_frame = CTkFrame(app, fg_color="transparent")
     button_frame.place(relx=0.72, rely=0.75, anchor="n")
 
@@ -210,7 +253,7 @@ def setup_main_page():
     format_button.grid(row=0, column=0, padx=(0, 150))
     next_button.grid(row=0, column=1, padx=(0, 220))
 
-# === Start App ===
+# === Entry Point ===
 apply_styles_for_mode()
 setup_main_page()
 app.mainloop()

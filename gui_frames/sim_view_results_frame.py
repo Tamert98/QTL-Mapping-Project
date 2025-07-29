@@ -1,9 +1,30 @@
+# =========================================== #
+#  SIMViewResultsFrame                        #
+#  Displays SIM LOD Score Results per Trait   #
+# =========================================== #
+
+# --- External Libraries ---
 from customtkinter import *
 from PIL import Image
 import os
 
+
 class SIMViewResultsFrame(CTkFrame):
+    """
+    Frame to view Single Interval Mapping (SIM) results.
+    Allows users to select a trait and chromosome to view the corresponding LOD score curve.
+    """
+
     def __init__(self, master, traits, styles, on_back):
+        """
+        Initialize the SIMViewResultsFrame.
+
+        Args:
+            master (Tk): Parent window.
+            traits (dict): Dictionary of trait names and their values.
+            styles (dict): Button style definitions.
+            on_back (function): Callback function to return to previous frame.
+        """
         super().__init__(master, width=1100, height=650)
         self.master = master
         self.traits = traits
@@ -18,15 +39,21 @@ class SIMViewResultsFrame(CTkFrame):
         self.build_ui()
 
     def build_ui(self):
-        CTkLabel(self, text="LOD score curves for each chromosome and trait",
-                 font=("Segoe UI", 22, "bold")).pack(pady=(20, 10))
+        """Construct the layout and UI components."""
+        CTkLabel(
+            self,
+            text="LOD score curves for each chromosome and trait",
+            font=("Segoe UI", 22, "bold")
+        ).pack(pady=(20, 10))
 
+        # === Dropdown Section ===
         dropdown_frame = CTkFrame(self, fg_color="transparent")
         dropdown_frame.pack(pady=10)
 
-        # === Trait Dropdown ===
+        # --- Trait Selection ---
         trait_frame = CTkFrame(dropdown_frame, fg_color="transparent")
         trait_frame.pack(side="left", padx=15)
+
         CTkLabel(trait_frame, text="Pick a trait from list:", font=("Segoe UI", 14)).pack()
         self.trait_dropdown = CTkOptionMenu(
             trait_frame,
@@ -40,9 +67,10 @@ class SIMViewResultsFrame(CTkFrame):
         )
         self.trait_dropdown.pack()
 
-        # === Chromosome Dropdown ===
+        # --- Chromosome Selection ---
         chrom_frame = CTkFrame(dropdown_frame, fg_color="transparent")
         chrom_frame.pack(side="left", padx=15)
+
         CTkLabel(chrom_frame, text="Pick a chromosome from list:", font=("Segoe UI", 14)).pack()
         self.chrom_dropdown = CTkOptionMenu(
             chrom_frame,
@@ -56,26 +84,45 @@ class SIMViewResultsFrame(CTkFrame):
         )
         self.chrom_dropdown.pack()
 
-        # === Image Display ===
+        # === Image Display Section ===
         self.image_label = CTkLabel(self, text="")
         self.image_label.pack(expand=True, fill="both", pady=(10, 10), padx=20)
 
         # === Back Button ===
-        CTkButton(self, text="Back", font=("Segoe UI", 16, "bold"), width=160, height=46,
-                  command=self.on_back, **self.styles["white"]).pack(pady=(5, 15))
+        CTkButton(
+            self,
+            text="Back",
+            font=("Segoe UI", 16, "bold"),
+            width=160,
+            height=46,
+            command=self.on_back,
+            **self.styles["white"]
+        ).pack(pady=(5, 15))
 
     def update_plot(self, *_):
+        """
+        Update the displayed image based on dropdown selections.
+        """
         trait = self.trait_dropdown.get()
         chrom = self.chrom_dropdown.get()
         image_path = f"Results/SIM/Plots/{trait}/{chrom}_LOD_curve.png"
         self.display_image(image_path)
 
     def display_image(self, path):
+        """
+        Load and display the image at the given path.
+
+        Args:
+            path (str): Path to the LOD score image.
+        """
         if os.path.exists(path):
             img = Image.open(path)
             resized = img.resize((880, 400))
             tk_img = CTkImage(light_image=resized, size=resized.size)
             self.image_label.configure(image=tk_img, text="")
-            self.image_label.image = tk_img
+            self.image_label.image = tk_img  # Prevent garbage collection
         else:
-            self.image_label.configure(image=None, text=f"Image not found: {os.path.basename(path)}")
+            self.image_label.configure(
+                image=None,
+                text=f"Image not found: {os.path.basename(path)}"
+            )

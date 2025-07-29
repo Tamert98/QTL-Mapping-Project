@@ -1,8 +1,15 @@
+# ========================================================== #
+#  SMT_SIM_RunFrame                                          #
+#  GUI Frame for Applying SMT and SIM QTL Mapping Algorithms #
+# ========================================================== #
+
+# --- External Libraries ---
 from customtkinter import *
 from PIL import Image
 import threading
 import time
 
+# --- Internal Modules ---
 from single_marker_test import run_smt_for_all_traits
 from single_interval_mapping import run_sim_on_selected_markers
 from plot_utils import (
@@ -14,7 +21,26 @@ from plot_utils import (
 
 
 class SMT_SIM_RunFrame(CTkFrame):
-    def __init__(self, master, vcf_data, selected_markers, traits, sample_names, on_done, styles, genetic_maps_unfiltered):
+    """
+    Frame for running both SMT and SIM on the dataset.
+    Handles execution, live messaging, and visual progress feedback.
+    """
+
+    def __init__(self, master, vcf_data, selected_markers, traits,
+                 sample_names, on_done, styles, genetic_maps_unfiltered):
+        """
+        Initialize SMT_SIM_RunFrame.
+
+        Args:
+            master (Tk): Parent window.
+            vcf_data (dict): Parsed VCF genotype data.
+            selected_markers (dict): Selected marker pairs per chromosome.
+            traits (dict): Trait values per sample.
+            sample_names (list): List of sample identifiers.
+            on_done (func): Callback after both SMT and SIM complete.
+            styles (dict): Button/text color styles.
+            genetic_maps_unfiltered (dict): Raw genetic maps.
+        """
         super().__init__(master, width=1100, height=650)
         self.master = master
         self.vcf_data = vcf_data
@@ -24,14 +50,18 @@ class SMT_SIM_RunFrame(CTkFrame):
         self.styles = styles
         self.on_done = on_done
         self.genetic_maps_unfiltered = genetic_maps_unfiltered
+
+        # Store SMT and SIM results
         self.smt_results = None
         self.sim_results = None
 
         self.pack(fill="both", expand=True)
         self.message_lines = []
         self.textbox = None
+
         self.build_ui()
 
+        # Start SMT & SIM pipeline in background
         self.status_label.configure(
             text="The SMT algorithm is being applied...",
             text_color=self.styles["red"]["fg_color"]
@@ -40,6 +70,7 @@ class SMT_SIM_RunFrame(CTkFrame):
         threading.Thread(target=self.run_smt_then_sim, daemon=True).start()
 
     def build_ui(self):
+        """Create the UI layout for progress display and logging."""
         try:
             image = CTkImage(light_image=Image.open("gui_frames/Step3.png"), size=(250, 650))
             CTkLabel(self, image=image, text="").place(x=0, y=0)
@@ -51,6 +82,7 @@ class SMT_SIM_RunFrame(CTkFrame):
         content_frame.place(relx=0.6, rely=0.5, anchor="center")
 
         CTkLabel(content_frame, text="Applying SMT and SIM", font=("Segoe UI", 22, "bold")).pack(pady=(30, 10))
+
         self.status_label = CTkLabel(content_frame, text="", font=("Segoe UI", 16))
         self.status_label.pack(pady=10)
 
@@ -63,6 +95,12 @@ class SMT_SIM_RunFrame(CTkFrame):
         self.final_label.pack()
 
     def append_message(self, msg):
+        """
+        Append a message to the log area with GUI-safe updates.
+
+        Args:
+            msg (str): Message to display.
+        """
         self.message_lines.append(msg)
 
         def update_textbox():
@@ -74,11 +112,17 @@ class SMT_SIM_RunFrame(CTkFrame):
         self.master.after(0, update_textbox)
 
     def run_smt_then_sim(self):
+        """Run SMT, then SIM, and update GUI at each stage."""
+        # === Run SMT ===
         self.append_message("=== Starting SMT ===")
         self.smt_results = run_smt_for_all_traits(
-            self.vcf_data, self.traits, self.sample_names, message_callback=self.append_message
+            self.vcf_data,
+            self.traits,
+            self.sample_names,
+            message_callback=self.append_message
         )
 
+        # === Generate SMT Visuals ===
         self.master.after(0, lambda: self.status_label.configure(
             text="Generating SMT plots...", text_color=self.styles["red"]["fg_color"]
         ))
@@ -97,6 +141,7 @@ class SMT_SIM_RunFrame(CTkFrame):
         self.append_message("\n=== SMT Completed ===")
         self.append_message("=== Starting SIM ===")
 
+        # === Run SIM ===
         self.sim_results = run_sim_on_selected_markers(
             self.vcf_data,
             self.selected_markers,
@@ -105,13 +150,16 @@ class SMT_SIM_RunFrame(CTkFrame):
             message_callback=self.append_message
         )
 
+        # === Generate SIM Visuals ===
         self.append_message("Generating SIM LOD score plots...")
         plot_all_lod_curves(
             self.sim_results,
             alpha=0.05,
             output_dir="Results/SIM/Plots",
-            send_message=self.append_message  # ✅ Corrected
+            send_message=self.append_message
         )
+
+        # === Finalize ===
         self.master.after(0, lambda: self.status_label.configure(
             text="✔ SMT and SIM Completed", text_color="#228B22"
         ))
@@ -119,6 +167,8 @@ class SMT_SIM_RunFrame(CTkFrame):
         self.final_label.configure(text="✔ Results saved in Results/SMT and Results/SIM")
 
         time.sleep(1)
+
+        # === Transition to next step (View Results) ===
         self.master.after(0, lambda: self.on_done(
             sim_results=self.sim_results,
             smt_results=self.smt_results,
