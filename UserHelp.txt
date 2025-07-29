@@ -1,0 +1,95 @@
+
+=========================================
+          QTL Mapping User Help
+=========================================
+
+Welcome to our QTL Mapping System!
+
+This project was developed to identify and analyze Quantitative Trait Loci (QTLs) from genomic and phenotypic data. 
+It supports two modes of usage:
+1)graphical user interface (GUI) for ease of interaction,
+2)script-based approach using `main.py` for advanced or automated analysis.
+The system helps detect associations between genetic markers and traits by applying statistical models like SMT and SIM,
+generating visual maps and detailed reports.
+
+We recommend using the GUI for an interactive and user-friendly experience. However, main.py allows programmatic or automated usage as well.
+
+Input Requirements
+------------------
+
+1. VCF File
+- Contains genotype information for all samples.
+- Must follow standard VCF formatting.
+- Important rules:
+  - Include contig headers like: ##contig=<ID=chr01,length=123456>
+  - Header line must contain: #CHROM POS ID REF ALT QUAL ... FORMAT sample1 sample2 ...
+  - Genotype fields must follow the format: GT:PL:DP:GQ (e.g., 0/1:35,0,120:20:99)
+
+2. Trait File (trait.txt)
+- First line contains sample names (e.g., male-1.bowtie male-2.bowtie ...)
+- Each following line contains:
+  - A trait name
+  - Corresponding values for each sample
+  - Use '$' for missing values
+
+Example:
+Height  0.52  $  0.64
+
+real data files which were used are provided in the `Data/` folder:
+- `cataglyphis.final.DZ (1).vcf` file for 100 individuals
+- `trait.txt` with 30 traits measured per individual
+
+=========================================
+1. How to Use the Program
+=========================================
+
+You have two options to run the program:
+
+
+🔹 Option 1: **Using the GUI**
+- Launch it by running: `main_app.py`
+- The GUI includes built-in instructions and file format descriptions.
+- You can upload your VCF and trait files, and explore genetic maps, QTL results, and comparisons visually.
+
+🔹 Option 2: **Using the Script (`main.py`)**
+
+
+Steps:
+
+1. Prepare the input files:
+   - A `.vcf` file containing genotype data for your samples.
+   - A `trait.txt` file containing the trait values.
+
+2. Open `main.py` and update the file paths to match your VCF and trait.txt file.
+
+
+3. Run the main.py
+
+
+4. Once finished, results will be stored in the `Results/` directory.
+
+=========================================
+2. Result Files Overview
+=========================================
+
+Inside the `Results/` folder, you will find:
+
+✔ **Genetic Maps and Heatmaps**  
+   - Visual genetic distances between markers  
+   - Comparison of distances for filtered and unfiltered markers  
+   - Recombination heatmaps
+
+✔ **SMT and SIM Analysis Outputs**  
+   - For each trait, plots are generated showing significance (SMT) and LOD scores (SIM)
+
+✔ **Reports Folder (CSV)**  
+   - For every trait, a CSV report is created containing full statistical analysis across all markers:
+     - Marker positions
+     - P-values (SMT)
+     - LOD scores (SIM)
+     - QTL likelihood parameters
+     - Best QTL location (if found)
+
+=========================================
+Thank you for using our QTL Mapping System!
+=========================================
